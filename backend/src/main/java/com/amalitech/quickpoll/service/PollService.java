@@ -1,6 +1,8 @@
 package com.amalitech.quickpoll.service;
 
 import com.amalitech.quickpoll.dto.*;
+import com.amalitech.quickpoll.mapper.PollMapper;
+import com.amalitech.quickpoll.mapper.PollOptionMapper;
 import com.amalitech.quickpoll.model.*;
 import com.amalitech.quickpoll.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,8 @@ public class PollService {
     private final PollRepository pollRepository;
     private final PollOptionRepository optionRepository;
     private final VoteRepository voteRepository;
+    private final PollMapper pollMapper;
+    private final PollOptionMapper pollOptionMapper;
 
     public Page<PollResponse> getAllPolls(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
@@ -29,21 +33,19 @@ public class PollService {
     }
 
     public PollResponse createPoll(PollRequest request, User creator) {
-        Poll poll = Poll.builder()
-                .question(request.getQuestion())
-                .description(request.getDescription())
-                .creator(creator)
-                .multipleChoice(request.isMultipleChoice())
-                .status("ACTIVE")
-                .createdAt(LocalDateTime.now())
-                .build();
+        Poll poll = new Poll();
+        poll.setTitle(request.getQuestion());
+        poll.setQuestion(request.getQuestion());
+        poll.setDescription(request.getDescription());
+        poll.setCreator(creator);
+        poll.setMultiSelect(request.isMultipleChoice());
+        poll.setCreatedAt(LocalDateTime.now());
         poll = pollRepository.save(poll);
 
         for (String optionText : request.getOptions()) {
-            PollOption option = PollOption.builder()
-                    .text(optionText)
-                    .poll(poll)
-                    .build();
+            PollOption option = new PollOption();
+            option.setOptionText(optionText);
+            option.setPoll(poll);
             optionRepository.save(option);
         }
         return toResponse(pollRepository.findById(poll.getId()).get());
@@ -60,29 +62,20 @@ public class PollService {
     private PollResponse toResponse(Poll poll) {
         List<PollOption> options = optionRepository.findByPollId(poll.getId());
         int totalVotes = options.stream()
-                .mapToInt(o -> voteRepository.countByPollOptionId(o.getId()))
+                .mapToInt(o -> voteRepository.countByOptionId(o.getId()))
                 .sum();
 
         List<OptionResponse> optionResponses = options.stream().map(o -> {
-            int count = voteRepository.countByPollOptionId(o.getId());
-            return OptionResponse.builder()
-                    .id(o.getId())
-                    .text(o.getText())
-                    .voteCount(count)
-                    .percentage(totalVotes > 0 ? (count * 100.0 / totalVotes) : 0)
-                    .build();
+            int count = voteRepository.countByOptionId(o.getId());
+            OptionResponse response = pollOptionMapper.toResponse(o);
+            response.setVoteCount(count);
+            response.setPercentage(totalVotes > 0 ? (count * 100.0 / totalVotes) : 0);
+            return response;
         }).toList();
 
-        return PollResponse.builder()
-                .id(poll.getId())
-                .question(poll.getQuestion())
-                .description(poll.getDescription())
-                .creatorName(poll.getCreator().getName())
-                .status(poll.getStatus())
-                .multipleChoice(poll.isMultipleChoice())
-                .createdAt(poll.getCreatedAt())
-                .totalVotes(totalVotes)
-                .options(optionResponses)
-                .build();
+        PollResponse response = pollMapper.toResponse(poll);
+        response.setTotalVotes(totalVotes);
+        response.setOptions(optionResponses);
+        return response;
     }
 }

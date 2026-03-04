@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 @Table(name = "votes", uniqueConstraints = {
     @UniqueConstraint(columnNames = {"poll_id", "user_id"})
 })
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data @NoArgsConstructor @AllArgsConstructor
 public class Vote {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

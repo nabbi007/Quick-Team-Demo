@@ -5,9 +5,10 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.*;
 
+@Builder
 @Entity
 @Table(name = "polls")
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data @NoArgsConstructor @AllArgsConstructor
 public class Poll {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -17,12 +18,13 @@ public class Poll {
 
     private String description;
 
+    private String question;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "creator_id")
     private User creator;
 
     @OneToMany(mappedBy = "poll", cascade = CascadeType.ALL)
-    @Builder.Default
     private List<PollOption> options = new ArrayList<>();
 
     @Column(name = "multi_select")

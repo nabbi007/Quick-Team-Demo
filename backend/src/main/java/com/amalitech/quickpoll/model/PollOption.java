@@ -5,7 +5,7 @@ import lombok.*;
 
 @Entity
 @Table(name = "poll_options")
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data @NoArgsConstructor @AllArgsConstructor
 public class PollOption {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -18,6 +18,5 @@ public class PollOption {
     private String optionText;
 
     @Column(name = "vote_count")
-    @Builder.Default
     private int voteCount = 0;
 }

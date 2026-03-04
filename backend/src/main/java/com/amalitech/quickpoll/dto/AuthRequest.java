@@ -8,6 +8,6 @@ import lombok.*;
 public class AuthRequest {
     @Email @NotBlank
     private String email;
-    @NotBlank
+    @NotBlank(message = "Password cannot be blank")
     private String password;
 }
