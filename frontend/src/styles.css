@@ -1,0 +1,12 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; color: #1a1a2e; }
+.container { max-width: 900px; margin: 0 auto; padding: 20px; }
+.btn { padding: 10px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.btn-primary { background: #6c5ce7; color: white; }
+.btn-primary:hover { background: #5b4cdb; }
+.card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+input, textarea, select { width: 100%; padding: 12px; border: 1px solid #dfe6e9; border-radius: 8px; margin-bottom: 12px; font-size: 14px; }
+.navbar { background: #2d3436; color: white; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+.navbar a { color: white; text-decoration: none; margin-left: 20px; }
+.progress-bar { background: #dfe6e9; border-radius: 8px; height: 24px; overflow: hidden; margin-top: 6px; }
+.progress-fill { background: #6c5ce7; height: 100%; transition: width 0.3s ease; }

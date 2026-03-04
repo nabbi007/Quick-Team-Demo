@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: quickpoll
+  datasource:
+    url: jdbc:postgresql://localhost:5432/quickpoll
+    username: quickpoll
+    password: quickpoll123
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+
+server:
+  port: 8080
+
+jwt:
+  secret: Z29vZC1zZWNyZXQta2V5
+  expiration: 86400000
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true

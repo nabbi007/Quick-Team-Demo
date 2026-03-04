@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: quickpoll-db
+    environment:
+      POSTGRES_DB: quickpoll
+      POSTGRES_USER: quickpoll
+      POSTGRES_PASSWORD: quickpoll123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quickpoll"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: quickpoll-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/quickpoll
+      SPRING_DATASOURCE_USERNAME: quickpoll
+      SPRING_DATASOURCE_PASSWORD: quickpoll123
+      JWT_SECRET: Z29vZC1zZWNyZXQta2V5LWZvcg
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: quickpoll-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
