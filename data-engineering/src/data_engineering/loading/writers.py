@@ -1,0 +1,115 @@
+"""PostgreSQL upsert writers for all four analytics tables."""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
+import pandas as pd
+from sqlalchemy.dialects.postgresql import insert
+
+from data_engineering.config import get_engine
+from data_engineering.loading.models import (
+    analytics_option_breakdown,
+    analytics_poll_summary,
+    analytics_user_participation,
+    analytics_votes_timeseries,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _now() -> datetime:
+    return datetime.utcnow()
+
+
+def upsert_poll_summary(df: pd.DataFrame) -> None:
+    """Upsert rows into analytics_poll_summary (keyed on poll_id)."""
+    if df.empty:
+        return
+    records = df.to_dict("records")
+    for r in records:
+        r["last_updated"] = _now()
+    stmt = insert(analytics_poll_summary).values(records)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["poll_id"],
+        set_={
+            "title": stmt.excluded.title,
+            "creator_name": stmt.excluded.creator_name,
+            "status": stmt.excluded.status,
+            "total_votes": stmt.excluded.total_votes,
+            "unique_voters": stmt.excluded.unique_voters,
+            "participation_rate": stmt.excluded.participation_rate,
+            "last_updated": stmt.excluded.last_updated,
+        },
+    )
+    with get_engine().begin() as conn:
+        conn.execute(stmt)
+    logger.debug("Upserted %d rows into analytics_poll_summary", len(records))
+
+
+def upsert_option_breakdown(df: pd.DataFrame) -> None:
+    """Upsert rows into analytics_option_breakdown (keyed on option_id)."""
+    if df.empty:
+        return
+    records = df.to_dict("records")
+    for r in records:
+        r["last_updated"] = _now()
+    stmt = insert(analytics_option_breakdown).values(records)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["option_id"],
+        set_={
+            "poll_id": stmt.excluded.poll_id,
+            "option_text": stmt.excluded.option_text,
+            "vote_count": stmt.excluded.vote_count,
+            "vote_percentage": stmt.excluded.vote_percentage,
+            "last_updated": stmt.excluded.last_updated,
+        },
+    )
+    with get_engine().begin() as conn:
+        conn.execute(stmt)
+    logger.debug("Upserted %d rows into analytics_option_breakdown", len(records))
+
+
+def upsert_votes_timeseries(df: pd.DataFrame) -> None:
+    """Upsert rows into analytics_votes_timeseries (keyed on poll_id + bucket_time)."""
+    if df.empty:
+        return
+    records = df.to_dict("records")
+    for r in records:
+        r["recorded_at"] = _now()
+    stmt = insert(analytics_votes_timeseries).values(records)
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_timeseries_poll_bucket",
+        set_={
+            "votes_in_bucket": stmt.excluded.votes_in_bucket,
+            "recorded_at": stmt.excluded.recorded_at,
+        },
+    )
+    with get_engine().begin() as conn:
+        conn.execute(stmt)
+    logger.debug("Upserted %d rows into analytics_votes_timeseries", len(records))
+
+
+def upsert_user_participation(df: pd.DataFrame) -> None:
+    """Upsert rows into analytics_user_participation (keyed on user_id)."""
+    if df.empty:
+        return
+    records = df.to_dict("records")
+    for r in records:
+        r["last_updated"] = _now()
+    stmt = insert(analytics_user_participation).values(records)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["user_id"],
+        set_={
+            "user_name": stmt.excluded.user_name,
+            "total_votes_cast": stmt.excluded.total_votes_cast,
+            "polls_participated": stmt.excluded.polls_participated,
+            "polls_created": stmt.excluded.polls_created,
+            "last_active": stmt.excluded.last_active,
+            "last_updated": stmt.excluded.last_updated,
+        },
+    )
+    with get_engine().begin() as conn:
+        conn.execute(stmt)
+    logger.debug("Upserted %d rows into analytics_user_participation", len(records))
