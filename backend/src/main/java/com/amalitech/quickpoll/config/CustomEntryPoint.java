@@ -14,13 +14,12 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.Date;
 
 @Component
-public class EntryPoint  implements AuthenticationEntryPoint {
+public class CustomEntryPoint implements AuthenticationEntryPoint {
     private final ObjectMapper objectMapper;
 
-    public EntryPoint(ObjectMapper objectMapper) {
+    public CustomEntryPoint(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 

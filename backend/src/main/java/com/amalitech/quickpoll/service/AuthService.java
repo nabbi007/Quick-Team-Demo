@@ -47,25 +47,20 @@ public class AuthService {
     }
 
     public AuthServiceResponse login(AuthRequest request) {
-        try {
-            Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            request.getEmail(),
-                            request.getPassword()
-                    )
-            );
-            if(!authentication.isAuthenticated()) {
-                throw new BadCredentialsException("Invalid credentials");
-            }
-            User user = (User) authentication.getPrincipal();
-            
-            String token = jwtService.generateToken(user.getEmail(), user.getRole());
-            String refreshToken = jwtService.generateRefreshToken(user.getEmail(), user.getRole());
-            
-            return authMapper.toAuthServiceResponse(token, refreshToken, user.getEmail(), user.getFullName(), user.getRole());
-        } catch (Exception e) {
-            throw new RuntimeException("Login failed: " + e.getMessage());
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        request.getEmail(),
+                        request.getPassword()
+                )
+        );
+        if(!authentication.isAuthenticated()) {
+            throw new BadCredentialsException("Invalid credentials");
         }
+        User user = (User) authentication.getPrincipal();
+
+        String token = jwtService.generateToken(user.getEmail(), user.getRole());
+        String refreshToken = jwtService.generateRefreshToken(user.getEmail(), user.getRole());
+        return authMapper.toAuthServiceResponse(token, refreshToken, user.getEmail(), user.getFullName(), user.getRole());
     }
 
     public AuthServiceResponse refreshToken(String refreshToken) {
