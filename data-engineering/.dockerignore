@@ -1,0 +1,12 @@
+.venv
+.git
+.gitignore
+__pycache__
+*.pyc
+.python-version
+.env
+*.md
+!README.md
+.ai-reference-docs
+.github
+.agents
