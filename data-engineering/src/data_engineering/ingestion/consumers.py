@@ -4,18 +4,19 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
+import botocore.exceptions
 from kafka import KafkaConsumer
 
 from data_engineering.config import (
-    DLQ_PATH,
     KAFKA_BOOTSTRAP_SERVERS,
     KAFKA_GROUP_ID,
     KAFKA_TOPIC_POLL_EVENTS,
     KAFKA_TOPIC_VOTE_EVENTS,
+    R2_DLQ_BUCKET,
+    get_s3_client,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,22 +41,35 @@ def create_consumer() -> KafkaConsumer:
     )
 
 
-def write_to_dlq(event: Any) -> None:
-    """
-    Persist a failed event to the dead-letter queue directory as a JSON file.
-    The filename encodes the event_type and timestamp for easy inspection.
-    """
-    dlq_dir = Path(DLQ_PATH)
-    dlq_dir.mkdir(parents=True, exist_ok=True)
+def check_dlq_bucket() -> None:
+    """Verify the R2 DLQ bucket is reachable at startup. Non-fatal on failure."""
+    try:
+        get_s3_client().head_bucket(Bucket=R2_DLQ_BUCKET)
+        logger.info("DLQ bucket '%s' is reachable.", R2_DLQ_BUCKET)
+    except botocore.exceptions.ClientError as exc:
+        logger.warning(
+            "DLQ bucket '%s' is not reachable (%s). Failed events will be lost.",
+            R2_DLQ_BUCKET,
+            exc,
+        )
 
+
+def write_to_dlq(event: Any) -> None:
+    """Upload a failed event as a JSON object to the Cloudflare R2 DLQ bucket."""
     event_type = "unknown"
     if isinstance(event, dict):
         event_type = event.get("event_type", "unknown")
 
-    timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S%f")
-    filepath = dlq_dir / f"{event_type}_{timestamp}.json"
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
+    key = f"dlq/{event_type}/{timestamp}.json"
 
-    with filepath.open("w") as f:
-        json.dump(event, f, indent=2, default=str)
-
-    logger.warning("Event written to DLQ: %s", filepath)
+    try:
+        get_s3_client().put_object(
+            Bucket=R2_DLQ_BUCKET,
+            Key=key,
+            Body=json.dumps(event, default=str).encode(),
+            ContentType="application/json",
+        )
+        logger.warning("Event uploaded to R2 DLQ: s3://%s/%s", R2_DLQ_BUCKET, key)
+    except botocore.exceptions.ClientError as exc:
+        logger.error("Failed to upload event to R2 DLQ: %s", exc)

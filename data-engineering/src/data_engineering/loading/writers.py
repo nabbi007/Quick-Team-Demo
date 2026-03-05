@@ -98,6 +98,10 @@ def upsert_user_participation(df: pd.DataFrame) -> None:
     records = df.to_dict("records")
     for r in records:
         r["last_updated"] = _now()
+        # NaT survives .to_dict() — replace with None for PostgreSQL
+        val = r.get("last_active")
+        if val is pd.NaT or (val is not None and pd.isna(val)):
+            r["last_active"] = None
     stmt = insert(analytics_user_participation).values(records)
     stmt = stmt.on_conflict_do_update(
         index_elements=["user_id"],

@@ -150,6 +150,10 @@ def compute_user_participation(
     result["polls_participated"] = result["polls_participated"].fillna(0).astype(int)
     result["polls_created"] = result["polls_created"].fillna(0).astype(int)
 
+    # Convert NaT → None so PostgreSQL receives NULL, not "NaT"
+    result["last_active"] = result["last_active"].astype(object)
+    result.loc[result["last_active"].isna(), "last_active"] = None
+
     return result[
         [
             "user_id",

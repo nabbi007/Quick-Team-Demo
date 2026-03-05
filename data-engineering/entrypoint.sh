@@ -19,4 +19,4 @@ done
 echo "Kafka is ready."
 
 echo "Starting QuickPoll analytics pipeline..."
-exec uv run python main.py
+exec python main.py
