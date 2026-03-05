@@ -3,11 +3,14 @@ package com.amalitech.quickpoll.service;
 import com.amalitech.quickpoll.config.JwtService;
 import com.amalitech.quickpoll.dto.*;
 import com.amalitech.quickpoll.errorhandlers.EmailAlreadyRegistered;
+import com.amalitech.quickpoll.errorhandlers.InvalidTokenException;
+import com.amalitech.quickpoll.errorhandlers.UserNotFoundException;
 import com.amalitech.quickpoll.mapper.AuthMapper;
 import com.amalitech.quickpoll.model.User;
 import com.amalitech.quickpoll.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -51,6 +54,9 @@ public class AuthService {
                             request.getPassword()
                     )
             );
+            if(!authentication.isAuthenticated()) {
+                throw new BadCredentialsException("Invalid credentials");
+            }
             User user = (User) authentication.getPrincipal();
             
             String token = jwtService.generateToken(user.getEmail(), user.getRole());
@@ -63,18 +69,22 @@ public class AuthService {
     }
 
     public AuthServiceResponse refreshToken(String refreshToken) {
-        if (!jwtService.isTokenValid(refreshToken)) {
-            throw new RuntimeException("Invalid refresh token");
-        }
-        
-        String email = jwtService.extractEmail(refreshToken);
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        
-        String newToken = jwtService.generateToken(user.getEmail(), user.getRole());
-        String newRefreshToken = jwtService.generateRefreshToken(user.getEmail(), user.getRole());
-        
-        return authMapper.toAuthServiceResponse(newToken, newRefreshToken, user.getEmail(), user.getFullName(), user.getRole());
-    }
+       try{
+           if (!jwtService.isTokenValid(refreshToken)) {
+               throw new InvalidTokenException("Invalid refresh token");
+           }
+
+           String email = jwtService.extractEmail(refreshToken);
+           User user = userRepository.findByEmail(email)
+                   .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+           String newToken = jwtService.generateToken(user.getEmail(), user.getRole());
+           String newRefreshToken = jwtService.generateRefreshToken(user.getEmail(), user.getRole());
+
+           return authMapper.toAuthServiceResponse(newToken, newRefreshToken, user.getEmail(), user.getFullName(), user.getRole());
+       } catch (Exception e) {
+           throw new RuntimeException("Token refresh failed: " + e.getMessage());
+       }
+       }
 
 }
