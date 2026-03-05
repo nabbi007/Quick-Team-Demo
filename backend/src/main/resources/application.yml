@@ -2,9 +2,9 @@ spring:
   application:
     name: quickpoll
   datasource:
-    url: jdbc:postgresql://localhost:5432/quickpoll
-    username: quickpoll
-    password: quickpoll123
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -12,7 +12,7 @@ spring:
     show-sql: true
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
         dialect: org.hibernate.dialect.PostgreSQLDialect
   sql:
     init:
@@ -23,7 +23,7 @@ server:
   port: 8080
 
 jwt:
-  secret: Z29vZC1zZWNyZXQta2V5
+  secret: ${JWT_SECRET}
   expiration: 86400000
 
 springdoc:
