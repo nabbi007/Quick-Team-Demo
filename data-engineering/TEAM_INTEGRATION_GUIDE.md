@@ -1,8 +1,5 @@
 # QuickPoll Data Engineering — Team Integration Guide
 
-**Author:** Henry Nana Antwi — Data Engineer, Team 6  
-**Project:** QuickPoll — AmaliTech Phase 1 Capstone  
-**Date:** March 2026
 
 > This document explains how my data engineering pipeline fits into the project and tells each teammate exactly what they need to do to make it work. You do not need to read the full `PIPELINE_ARCHITECTURE.md` — just find your role below and follow the steps.
 
@@ -369,4 +366,3 @@ SELECT * FROM analytics_user_participation;
 ## Questions?
 
 If you have any questions about my pipeline or need something from me, reach out directly.  
-**Henry Nana Antwi** — Data Engineering — henry.antwi@***.com
