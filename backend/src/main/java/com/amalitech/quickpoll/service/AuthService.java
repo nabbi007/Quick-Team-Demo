@@ -5,7 +5,6 @@ import com.amalitech.quickpoll.dto.*;
 import com.amalitech.quickpoll.errorhandlers.EmailAlreadyRegistered;
 import com.amalitech.quickpoll.mapper.AuthMapper;
 import com.amalitech.quickpoll.model.User;
-import com.amalitech.quickpoll.model.enums.Role;
 import com.amalitech.quickpoll.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -23,7 +22,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final AuthMapper authMapper;
 
-    public AuthResponse register(RegisterRequest request) {
+    public AuthServiceResponse register(RegisterRequest request) {
         try {
             if (userRepository.existsByEmail(request.getEmail())) {
                 throw new EmailAlreadyRegistered("Email already registered");
@@ -33,10 +32,14 @@ public class AuthService {
             user.setRole("USER");
             
             String token = jwtService.generateToken(user.getEmail(), user.getRole());
-            
+            String refreshToken = jwtService.generateRefreshToken(user.getEmail(), user.getRole());
             userRepository.save(user);
-            AuthResponse response = authMapper.toAuthResponse(user);
+            AuthServiceResponse response = new AuthServiceResponse();
             response.setToken(token);
+            response.setRefreshToken(refreshToken);
+            response.setEmail(user.getEmail());
+            response.setName(user.getFullName());
+            response.setRole(user.getRole());
             return response;
         } catch (EmailAlreadyRegistered e) {
             throw e;
@@ -45,7 +48,7 @@ public class AuthService {
         }
     }
 
-    public AuthResponse login(AuthRequest request) {
+    public AuthServiceResponse login(AuthRequest request) {
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
@@ -55,11 +58,18 @@ public class AuthService {
             );
             User user = (User) authentication.getPrincipal();
             
-            AuthResponse response = authMapper.toAuthResponse(user);
-            response.setToken(jwtService.generateToken(user.getEmail(), user.getRole()));
+            String token = jwtService.generateToken(user.getEmail(), user.getRole());
+            String refreshToken = jwtService.generateRefreshToken(user.getEmail(), user.getRole());
+            AuthServiceResponse response = new AuthServiceResponse();
+            response.setToken(token);
+            response.setRefreshToken(refreshToken);
+            response.setEmail(user.getEmail());
+            response.setName(user.getFullName());
+            response.setRole(user.getRole());
             return response;
         } catch (Exception e) {
             throw new RuntimeException("Login failed: " + e.getMessage());
         }
     }
+
 }

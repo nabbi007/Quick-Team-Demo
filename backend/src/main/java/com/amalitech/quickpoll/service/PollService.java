@@ -33,13 +33,7 @@ public class PollService {
     }
 
     public PollResponse createPoll(PollRequest request, User creator) {
-        Poll poll = new Poll();
-        poll.setTitle(request.getQuestion());
-        poll.setQuestion(request.getQuestion());
-        poll.setDescription(request.getDescription());
-        poll.setCreator(creator);
-        poll.setMultiSelect(request.isMultipleChoice());
-        poll.setCreatedAt(LocalDateTime.now());
+        Poll poll = pollMapper.toEntity(request, creator);
         poll = pollRepository.save(poll);
 
         for (String optionText : request.getOptions()) {

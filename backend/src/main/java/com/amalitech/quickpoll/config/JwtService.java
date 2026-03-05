@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
-import java.security.Key;
 import java.util.Date;
 
 @Service
@@ -37,16 +36,26 @@ public class JwtService {
     }
 
     public String extractEmail(String token) {
-        return Jwts.parser().setSigningKey(signingKey).build()
-                .parseClaimsJws(token).getPayload().getSubject();
+        return Jwts.parser().verifyWith(signingKey).build()
+                .parseSignedClaims(token).getPayload().getSubject();
     }
 
     public boolean isTokenValid(String token) {
         try {
-            Jwts.parser().setSigningKey(signingKey).build().parseClaimsJws(token);
+            Jwts.parser().verifyWith(signingKey).build().parseSignedClaims(token);
             return true;
         } catch (JwtException e) {
             return false;
         }
+    }
+
+    public String generateRefreshToken(String email,String role){
+        return Jwts.builder()
+                .subject(email)
+                .claim("role", role)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + expiration * 2)) // Longer expiration for refresh token
+                .signWith(signingKey)
+                .compact();
     }
 }

@@ -7,7 +7,12 @@ import java.util.*;
 
 @Builder
 @Entity
-@Table(name = "polls")
+@Table(name = "polls", indexes = {
+    @Index(name = "idx_poll_creator", columnList = "creator_id"),
+    @Index(name = "idx_poll_active", columnList = "active"),
+    @Index(name = "idx_poll_expires_at", columnList = "expires_at"),
+    @Index(name = "idx_poll_created_at", columnList = "created_at")
+})
 @Data @NoArgsConstructor @AllArgsConstructor
 public class Poll {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -15,9 +20,10 @@ public class Poll {
 
     @Column(nullable = false)
     private String title;
-
+    @Column(length = 1000, nullable = false)
     private String description;
 
+    @Column(nullable = false)
     private String question;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -25,6 +31,7 @@ public class Poll {
     private User creator;
 
     @OneToMany(mappedBy = "poll", cascade = CascadeType.ALL)
+    @Builder.Default
     private List<PollOption> options = new ArrayList<>();
 
     @Column(name = "multi_select")
