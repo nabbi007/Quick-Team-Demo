@@ -30,17 +30,12 @@ public class AuthService {
             User user = authMapper.toUser(request);
             user.setPassword(passwordEncoder.encode(request.getPassword()));
             user.setRole("USER");
+            userRepository.save(user);
             
             String token = jwtService.generateToken(user.getEmail(), user.getRole());
             String refreshToken = jwtService.generateRefreshToken(user.getEmail(), user.getRole());
-            userRepository.save(user);
-            AuthServiceResponse response = new AuthServiceResponse();
-            response.setToken(token);
-            response.setRefreshToken(refreshToken);
-            response.setEmail(user.getEmail());
-            response.setName(user.getFullName());
-            response.setRole(user.getRole());
-            return response;
+            
+            return authMapper.toAuthServiceResponse(token, refreshToken, user.getEmail(), user.getFullName(), user.getRole());
         } catch (EmailAlreadyRegistered e) {
             throw e;
         } catch (Exception e) {
@@ -60,16 +55,26 @@ public class AuthService {
             
             String token = jwtService.generateToken(user.getEmail(), user.getRole());
             String refreshToken = jwtService.generateRefreshToken(user.getEmail(), user.getRole());
-            AuthServiceResponse response = new AuthServiceResponse();
-            response.setToken(token);
-            response.setRefreshToken(refreshToken);
-            response.setEmail(user.getEmail());
-            response.setName(user.getFullName());
-            response.setRole(user.getRole());
-            return response;
+            
+            return authMapper.toAuthServiceResponse(token, refreshToken, user.getEmail(), user.getFullName(), user.getRole());
         } catch (Exception e) {
             throw new RuntimeException("Login failed: " + e.getMessage());
         }
+    }
+
+    public AuthServiceResponse refreshToken(String refreshToken) {
+        if (!jwtService.isTokenValid(refreshToken)) {
+            throw new RuntimeException("Invalid refresh token");
+        }
+        
+        String email = jwtService.extractEmail(refreshToken);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        String newToken = jwtService.generateToken(user.getEmail(), user.getRole());
+        String newRefreshToken = jwtService.generateRefreshToken(user.getEmail(), user.getRole());
+        
+        return authMapper.toAuthServiceResponse(newToken, newRefreshToken, user.getEmail(), user.getFullName(), user.getRole());
     }
 
 }
