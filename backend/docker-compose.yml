@@ -19,7 +19,7 @@ services:
       retries: 5
 
   app:
-    image: quickpollapi:latest
+    build: .
     container_name: quickpoll-app
     environment:
       JWT_SECRET: Z29vZC1zZWNyZXQta2V5bG9uZ3NlY3JldGtleXRoYXRzaG91bGRiZXJlcGxhY2Vkd2l0aGVudnZhcmlhYmxl
