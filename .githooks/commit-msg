@@ -1,0 +1,116 @@
+#!/bin/bash
+# ============================================================
+# File:    .githooks/commit-msg
+# Purpose: Enforces Conventional Commits format on every commit
+#          so the team keeps a clean, readable Git history.
+# Install: Run .githooks/setup.sh once after cloning.
+#          Or manually: git config core.hooksPath .githooks
+# ============================================================
+
+# --- Read the commit message from the file Git provides ---
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# --- Define the allowed commit types ---
+ALLOWED_TYPES="feat|fix|docs|ci|chore|refactor|test|style|perf"
+
+# --- The regex pattern for a valid conventional commit ---
+# Format: type(scope): description
+# - type     : one of the allowed types above
+# - (scope)  : optional, letters/numbers/hyphens inside parentheses
+# - :        : a colon followed by a single space
+# - description: 1 to 72 characters
+PATTERN="^($ALLOWED_TYPES)(\([a-zA-Z0-9_-]+\))?: .{1,72}$"
+
+# --- Skip validation for merge commits (Git generates these automatically) ---
+if echo "$COMMIT_MSG" | grep -qE "^Merge "; then
+  exit 0
+fi
+
+# --- Skip validation for revert commits ---
+if echo "$COMMIT_MSG" | grep -qE "^Revert "; then
+  exit 0
+fi
+
+# --- Reject empty commit messages ---
+if [ -z "$(echo "$COMMIT_MSG" | tr -d '[:space:]')" ]; then
+  echo ""
+  echo "❌  Commit blocked: Your commit message is empty."
+  echo ""
+  echo "  Please provide a meaningful commit message."
+  echo ""
+  exit 1
+fi
+
+# --- Validate the commit message against the pattern ---
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+
+  # Work out which part of the message likely failed, to give a targeted hint
+  TYPE_PART=$(echo "$COMMIT_MSG" | cut -d'(' -f1 | cut -d':' -f1)
+  VALID_TYPE=$(echo "$TYPE_PART" | grep -qE "^($ALLOWED_TYPES)$" && echo "yes" || echo "no")
+
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════╗"
+  echo "║         ❌  COMMIT BLOCKED — Invalid commit message          ║"
+  echo "╚══════════════════════════════════════════════════════════════╝"
+  echo ""
+  echo "  Your message:"
+  echo "    \"$COMMIT_MSG\""
+  echo ""
+
+  # Give a specific hint based on what looks wrong
+  if [ "$VALID_TYPE" = "no" ]; then
+    echo "  Problem: \"$TYPE_PART\" is not an allowed commit type."
+    echo ""
+    echo "  Allowed types:"
+    echo "    feat     → A new feature"
+    echo "    fix      → A bug fix"
+    echo "    docs     → Documentation only changes"
+    echo "    ci       → CI/CD configuration changes"
+    echo "    chore    → Maintenance tasks (no production code change)"
+    echo "    refactor → Code change that is neither a fix nor a feature"
+    echo "    test     → Adding or updating tests"
+    echo "    style    → Formatting, whitespace (no logic change)"
+    echo "    perf     → Performance improvement"
+  fi
+
+  DESC_LENGTH=$(echo "$COMMIT_MSG" | sed 's/^[^:]*: //' | wc -c)
+  if [ "$DESC_LENGTH" -gt 73 ]; then
+    echo "  Problem: Description is too long (${DESC_LENGTH} chars). Max is 72."
+  fi
+
+  echo ""
+  echo "  ─────────────────────────────────────────────────────────────"
+  echo "  Required format:"
+  echo ""
+  echo "    type(scope): short description"
+  echo ""
+  echo "  • type        — required, one of the allowed types above"
+  echo "  • (scope)     — optional, e.g. (auth), (api), (ui)"
+  echo "  • description — required, 1–72 characters"
+  echo ""
+  echo "  ─────────────────────────────────────────────────────────────"
+  echo "  ✅  Good examples:"
+  echo "    feat(auth): add JWT login endpoint"
+  echo "    fix(api): handle null response from payment service"
+  echo "    docs: update README with setup instructions"
+  echo "    chore(deps): upgrade axios to v1.6"
+  echo "    ci: add branch protection workflow"
+  echo ""
+  echo "  ❌  Bad examples:"
+  echo "    fixed stuff          ← no type"
+  echo "    WIP                  ← no type or description"
+  echo "    feature: something   ← 'feature' is not valid, use 'feat'"
+  echo "    feat:missing-space   ← missing space after colon"
+  echo "    feat(auth): $(python3 -c 'print("x"*73)' 2>/dev/null || printf '%0.s-' {1..73})  ← description too long"
+  echo "  ─────────────────────────────────────────────────────────────"
+  echo ""
+  echo "  Tip: Amend your message with:"
+  echo "    git commit --amend -m \"feat(scope): your description\""
+  echo ""
+  exit 1
+fi
+
+# --- All checks passed ---
+echo "✅  Commit message format is valid."
+exit 0
