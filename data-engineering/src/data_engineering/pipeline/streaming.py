@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import pandas as pd
+from kafka.errors import NoBrokersAvailable
 
 from data_engineering.ingestion.consumers import create_consumer, write_to_dlq
 from data_engineering.ingestion.extractors import (
@@ -37,10 +39,32 @@ def run_streaming() -> None:
     On each event: recomputes analytics scoped to the affected poll/user,
     writes to DB, then commits the Kafka offset.
     On failure: writes the raw event to the DLQ and commits to avoid a stuck consumer.
+    Retries with exponential backoff when Kafka is unavailable.
     """
-    logger.info("Starting Kafka consumer loop...")
-    consumer = create_consumer()
+    max_delay = 60
+    delay = 5
 
+    while True:
+        try:
+            logger.info("Starting Kafka consumer loop...")
+            consumer = create_consumer()
+            delay = 5  # reset on successful connection
+        except NoBrokersAvailable:
+            logger.warning("Kafka is not available. Retrying in %ds...", delay)
+            time.sleep(delay)
+            delay = min(delay * 2, max_delay)
+            continue
+
+        try:
+            _consume_loop(consumer)
+        except NoBrokersAvailable:
+            logger.warning("Lost Kafka connection. Reconnecting in %ds...", delay)
+            time.sleep(delay)
+            delay = min(delay * 2, max_delay)
+
+
+def _consume_loop(consumer) -> None:
+    """Process messages from an already-connected Kafka consumer."""
     for message in consumer:
         event = message.value
         event_type = event.get("event_type") if isinstance(event, dict) else None
