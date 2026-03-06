@@ -19,6 +19,7 @@ scripts:
   seed-ai: uv run python scripts/seed_ai_oltp.py
   seed: uv run python scripts/seed_data.py
   mock-produce: uv run python scripts/mock_producer.py
+  seed-publish: uv run python scripts/seed_and_publish.py
 
   # Backfill modes
   backfill: uv run python main.py

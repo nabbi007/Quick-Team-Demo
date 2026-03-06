@@ -230,7 +230,7 @@ When used in the full stack (root `docker-compose.yml`), the data-engineering se
 
 ## 7. Seeding Test Data
 
-Three scripts are available for populating the database with test data.
+Four scripts are available for populating the database with test data.
 
 ### Static Seed Data
 
@@ -273,6 +273,53 @@ rav x mock-produce
 
 # Custom number of votes
 uv run python scripts/mock_producer.py --votes 20
+```
+
+### End-to-End Simulation (OLTP + Kafka)
+
+The `seed_and_publish.py` script is the **recommended way to test the full pipeline**. It
+simulates what the backend would do: insert data into OLTP tables AND publish matching Kafka
+events so both the backfill and streaming consumer can be exercised.
+
+```powershell
+# Default: 8 users, 5 polls, ~50 votes → OLTP + Kafka
+rav x seed-publish
+
+# Larger dataset
+uv run python scripts/seed_and_publish.py --polls 15 --votes-per-poll 20
+
+# Trickle mode: votes arrive one-by-one with a 2-second delay (simulates real-time)
+uv run python scripts/seed_and_publish.py --stream-delay 2
+
+# OLTP only (no Kafka — useful when Kafka isn't running)
+uv run python scripts/seed_and_publish.py --no-kafka
+
+# Reproducible runs
+uv run python scripts/seed_and_publish.py --seed 42
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--polls N` | 5 | Number of polls to create |
+| `--votes-per-poll N` | 10 | Max votes per poll (limited by user count) |
+| `--users N` | 8 | Number of new users in the pool |
+| `--stream-delay SEC` | 0 | Seconds between vote events (0 = batch) |
+| `--kafka / --no-kafka` | `--kafka` | Toggle Kafka event publishing |
+| `--seed N` | random | Random seed for reproducibility |
+
+**Typical test workflow:**
+
+```powershell
+# 1. Start Kafka
+docker compose -f docker-compose.kafka-dev.yml up -d
+
+# 2. Start the pipeline (backfill + consumer)
+rav x backfill-full
+
+# 3. In another terminal, seed data + publish events
+rav x seed-publish
+
+# 4. Watch the pipeline consume events and update analytics in real-time
 ```
 
 ---
@@ -419,6 +466,7 @@ All commands use the [rav](https://github.com/jmitchel3/rav) task runner. Run fr
 |---------|-------------|
 | `rav x seed` | Insert static test data (5 users, 4 polls, 16 votes) |
 | `rav x seed-ai` | Generate AI-powered test data via Groq |
+| `rav x seed-publish` | Seed OLTP + publish Kafka events (full E2E testing) |
 | `rav x mock-produce` | Publish mock Kafka events for testing |
 
 ### Code Quality
