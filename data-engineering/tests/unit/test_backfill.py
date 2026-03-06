@@ -157,7 +157,6 @@ def _options_df() -> pd.DataFrame:
             "id": [1, 2, 3],
             "poll_id": [1, 1, 2],
             "option_text": ["A", "B", "C"],
-            "created_at": pd.to_datetime(["2026-01-01", "2026-01-01", "2026-01-02"]),
         }
     )
 
@@ -283,7 +282,6 @@ class TestIncrementalBackfill:
     @patch(f"{_BACKFILL_MOD}.upsert_option_breakdown")
     @patch(f"{_BACKFILL_MOD}.upsert_poll_summary")
     @patch(f"{_BACKFILL_MOD}.extract_users_since", return_value=_empty_df())
-    @patch(f"{_BACKFILL_MOD}.extract_options_since", return_value=_empty_df())
     @patch(f"{_BACKFILL_MOD}.extract_votes_since", return_value=_empty_df())
     @patch(f"{_BACKFILL_MOD}.extract_polls_since", return_value=_empty_df())
     @patch(f"{_BACKFILL_MOD}.get_watermark", return_value=_ts("2026-01-01T00:00:00"))
@@ -292,7 +290,6 @@ class TestIncrementalBackfill:
         mock_get_wm,
         mock_polls_since,
         mock_votes_since,
-        mock_options_since,
         mock_users_since,
         mock_upsert_ps,
         mock_upsert_ob,
@@ -328,7 +325,6 @@ class TestIncrementalBackfill:
     @patch(f"{_BACKFILL_MOD}.extract_votes_by_polls", return_value=_votes_df())
     @patch(f"{_BACKFILL_MOD}.extract_polls_by_ids", return_value=_polls_df())
     @patch(f"{_BACKFILL_MOD}.extract_users_since", return_value=_empty_df())
-    @patch(f"{_BACKFILL_MOD}.extract_options_since", return_value=_empty_df())
     @patch(
         f"{_BACKFILL_MOD}.extract_votes_since",
         return_value=pd.DataFrame(
@@ -348,7 +344,6 @@ class TestIncrementalBackfill:
         mock_get_wm,
         mock_polls_since,
         mock_votes_since,
-        mock_options_since,
         mock_users_since,
         mock_polls_by_ids,
         mock_votes_by_polls,
@@ -395,7 +390,6 @@ class TestIncrementalBackfill:
     @patch(f"{_BACKFILL_MOD}.extract_votes_by_polls", return_value=_votes_df())
     @patch(f"{_BACKFILL_MOD}.extract_polls_by_ids", return_value=_polls_df())
     @patch(f"{_BACKFILL_MOD}.extract_users_since", return_value=_empty_df())
-    @patch(f"{_BACKFILL_MOD}.extract_options_since", return_value=_empty_df())
     @patch(
         f"{_BACKFILL_MOD}.extract_votes_since",
         return_value=pd.DataFrame(
@@ -415,7 +409,6 @@ class TestIncrementalBackfill:
         mock_get_wm,
         mock_polls_since,
         mock_votes_since,
-        mock_options_since,
         mock_users_since,
         mock_polls_by_ids,
         mock_votes_by_polls,

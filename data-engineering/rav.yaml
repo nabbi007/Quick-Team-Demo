@@ -22,7 +22,7 @@ scripts:
 
   # Backfill modes
   backfill: uv run python main.py
-  backfill-full: FORCE_FULL_BACKFILL=true uv run python main.py
+  backfill-full: uv run python -c "import os; os.environ['FORCE_FULL_BACKFILL']='true'; from main import main; main()"
 
   # Code quality
   lint: uv run ruff check .

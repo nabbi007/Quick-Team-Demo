@@ -41,7 +41,7 @@ def extract_options(engine: Engine | None = None) -> pd.DataFrame:
     """Extract all poll options."""
     engine = engine or get_engine()
     query = text("""
-        SELECT id, poll_id, option_text, created_at
+        SELECT id, poll_id, option_text
         FROM poll_options
     """)
     with engine.connect() as conn:
@@ -169,20 +169,6 @@ def extract_votes_since(since: datetime, engine: Engine | None = None) -> pd.Dat
     query = text("""
         SELECT id, poll_id, option_id, user_id, created_at
         FROM votes
-        WHERE created_at > :since
-    """)
-    with engine.connect() as conn:
-        return pd.read_sql(query, conn, params={"since": since})
-
-
-def extract_options_since(
-    since: datetime, engine: Engine | None = None
-) -> pd.DataFrame:
-    """Extract poll options created after the given timestamp."""
-    engine = engine or get_engine()
-    query = text("""
-        SELECT id, poll_id, option_text, created_at
-        FROM poll_options
         WHERE created_at > :since
     """)
     with engine.connect() as conn:

@@ -18,11 +18,10 @@ from data_engineering.ingestion.extractors import (
     extract_options,
     # Batch (scoped recompute)
     extract_options_by_polls,
-    # Incremental (delta detection)
-    extract_options_since,
     extract_polls,
     extract_polls_by_creators,
     extract_polls_by_ids,
+    # Incremental (delta detection)
     extract_polls_since,
     extract_users,
     extract_users_by_ids,
@@ -50,7 +49,7 @@ from data_engineering.transformation.transformers import (
 
 logger = logging.getLogger(__name__)
 
-_ENTITIES = ("polls", "votes", "options", "users")
+_ENTITIES = ("polls", "votes", "users")
 
 
 def run_backfill() -> None:
@@ -103,9 +102,9 @@ def _full_backfill() -> None:
     upsert_user_participation(participation_df)
 
     # Set watermarks to MAX timestamp from each entity
+    # Options have no timestamp column in the OLTP schema, so no watermark is tracked.
     _advance_watermark("polls", polls_df, "created_at")
     _advance_watermark("votes", votes_df, "created_at")
-    _advance_watermark("options", options_df, "created_at")
     _advance_watermark("users", users_df, "created_at")
 
     logger.info("Full backfill complete. Watermarks set.")
@@ -114,30 +113,29 @@ def _full_backfill() -> None:
 def _incremental_backfill(watermarks: dict[str, datetime]) -> None:
     """
     Incremental backfill: extract deltas, identify affected IDs, batch recompute.
+
+    Note: poll_options has no timestamp column in the OLTP schema, so options
+    are not tracked independently.  Option changes are captured indirectly:
+    whenever a poll is modified (option added/removed), the poll's updated_at
+    changes, which surfaces the poll_id for a full-option reload via
+    extract_options_by_polls.
     """
     overlap = timedelta(minutes=WATERMARK_OVERLAP_MINUTES)
 
     # 1. Incremental extract (delta detection)
     delta_polls = extract_polls_since(watermarks["polls"] - overlap)
     delta_votes = extract_votes_since(watermarks["votes"] - overlap)
-    delta_options = extract_options_since(watermarks["options"] - overlap)
     delta_users = extract_users_since(watermarks["users"] - overlap)
 
     # 2. Early return if no changes
-    if (
-        delta_polls.empty
-        and delta_votes.empty
-        and delta_options.empty
-        and delta_users.empty
-    ):
+    if delta_polls.empty and delta_votes.empty and delta_users.empty:
         logger.info("Incremental backfill: no changes detected.")
         return
 
     logger.info(
-        "Incremental deltas: %d polls, %d votes, %d options, %d users",
+        "Incremental deltas: %d polls, %d votes, %d users",
         len(delta_polls),
         len(delta_votes),
-        len(delta_options),
         len(delta_users),
     )
 
@@ -152,8 +150,6 @@ def _incremental_backfill(watermarks: dict[str, datetime]) -> None:
         affected_poll_ids.update(delta_polls["id"].unique())
         if "creator_id" in delta_polls.columns:
             affected_user_ids.update(delta_polls["creator_id"].unique())
-    if not delta_options.empty:
-        affected_poll_ids.update(delta_options["poll_id"].unique())
     if not delta_users.empty:
         affected_user_ids.update(delta_users["id"].unique())
 
@@ -199,8 +195,6 @@ def _incremental_backfill(watermarks: dict[str, datetime]) -> None:
         _advance_watermark("polls", delta_polls, "updated_at")
     if not delta_votes.empty:
         _advance_watermark("votes", delta_votes, "created_at")
-    if not delta_options.empty:
-        _advance_watermark("options", delta_options, "created_at")
     if not delta_users.empty:
         _advance_watermark("users", delta_users, "updated_at")
 
