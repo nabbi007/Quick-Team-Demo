@@ -31,9 +31,10 @@ scripts:
   format: uv run ruff format --check .
   format-fix: uv run ruff format .
   check: uv run ruff check . && uv run ruff format --check .
-
+  
   # Testing
   test: uv run pytest tests/ -v
   test-cov: uv run pytest tests/ -v --cov=src/data_engineering --cov-report=term-missing
   test-unit: uv run pytest tests/unit/ -v
   test-backfill: uv run pytest tests/unit/test_backfill.py tests/unit/test_watermarks.py -v
+  test-streaming: uv run pytest tests/unit/test_streaming.py -v

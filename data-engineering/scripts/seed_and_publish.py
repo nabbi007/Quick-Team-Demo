@@ -234,9 +234,9 @@ def insert_polls(conn, polls: list[dict]) -> int:
         return 0
     result = conn.execute(
         text("""
-            INSERT INTO polls (id, title, description, creator_id, multi_select,
-                               expires_at, active, created_at)
-            VALUES (:id, :title, :description, :creator_id, false,
+            INSERT INTO polls (id, title, question, description, creator_id,
+                               multi_select, expires_at, active, created_at)
+            VALUES (:id, :title, :title, :description, :creator_id, false,
                     :expires_at ::timestamptz, true, :created_at ::timestamptz)
             ON CONFLICT (id) DO NOTHING
         """),
