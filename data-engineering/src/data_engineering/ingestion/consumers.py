@@ -37,6 +37,8 @@ def create_consumer() -> KafkaConsumer:
         group_id=KAFKA_GROUP_ID,
         auto_offset_reset="earliest",
         enable_auto_commit=False,
+        max_poll_records=50,
+        max_poll_interval_ms=600_000,  # 10 min — each event triggers DB I/O
         value_deserializer=lambda m: json.loads(m.decode("utf-8")),
     )
 

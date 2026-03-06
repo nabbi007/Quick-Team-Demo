@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from kafka.errors import NoBrokersAvailable
+from kafka.errors import CommitFailedError, NoBrokersAvailable
 
 
 def test_run_streaming_retries_on_no_brokers():
@@ -143,3 +143,44 @@ def test_periodic_backfill_does_not_trigger_before_interval():
             pass
 
     mock_backfill.assert_not_called()
+
+
+def test_commit_failed_error_is_caught_not_fatal():
+    """CommitFailedError (group rebalance) should be logged, not crash the loop."""
+    mock_consumer = MagicMock()
+    call_count = 0
+
+    def fake_poll(timeout_ms=5000):
+        nonlocal call_count
+        call_count += 1
+        if call_count > 2:
+            raise KeyboardInterrupt
+        # Return a non-empty dict so commit() is called
+        tp = MagicMock()
+        msg = MagicMock()
+        msg.value = {"event_type": "VOTE_CAST", "poll_id": 1, "user_id": 1}
+        return {tp: [msg]}
+
+    mock_consumer.poll = fake_poll
+    mock_consumer.commit.side_effect = CommitFailedError("group rebalanced")
+
+    monotonic_values = iter([0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
+
+    with (
+        patch(
+            "data_engineering.pipeline.streaming.time.monotonic",
+            side_effect=lambda: next(monotonic_values),
+        ),
+        patch("data_engineering.pipeline.streaming._handle_vote_event"),
+        patch("data_engineering.pipeline.streaming.run_backfill"),
+    ):
+        try:
+            from data_engineering.pipeline.streaming import _consume_loop
+
+            _consume_loop(mock_consumer)
+        except (KeyboardInterrupt, StopIteration):
+            pass
+
+    # The loop survived 2 polls despite CommitFailedError each time
+    assert call_count == 3
+    assert mock_consumer.commit.call_count == 2

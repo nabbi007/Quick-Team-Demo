@@ -6,7 +6,7 @@ import logging
 import time
 
 import pandas as pd
-from kafka.errors import NoBrokersAvailable
+from kafka.errors import CommitFailedError, NoBrokersAvailable
 
 from data_engineering.config import BACKFILL_INTERVAL_MINUTES
 from data_engineering.ingestion.consumers import create_consumer, write_to_dlq
@@ -97,7 +97,13 @@ def _consume_loop(consumer) -> None:
                     write_to_dlq(event)
 
         if records:
-            consumer.commit()
+            try:
+                consumer.commit()
+            except CommitFailedError:
+                logger.warning(
+                    "Offset commit failed (group rebalanced). "
+                    "Events will be re-delivered on next poll."
+                )
 
         # Periodic backfill check
         elapsed = time.monotonic() - last_backfill
