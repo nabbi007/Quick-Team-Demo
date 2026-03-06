@@ -47,6 +47,7 @@ def options_df() -> pd.DataFrame:
             "id": [1, 2, 3],
             "poll_id": [1, 1, 2],
             "option_text": ["AWS", "GCP", "PostgreSQL"],
+            "created_at": pd.to_datetime(["2026-01-01", "2026-01-01", "2026-01-02"]),
         }
     )
 

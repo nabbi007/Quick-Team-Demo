@@ -73,3 +73,73 @@ def test_run_streaming_reconnects_on_lost_connection():
 
     assert attempt == 2
     mock_sleep.assert_called_once_with(5)
+
+
+def test_periodic_backfill_triggers_after_interval():
+    """Periodic backfill should run when BACKFILL_INTERVAL_MINUTES elapsed."""
+    mock_consumer = MagicMock()
+    call_count = 0
+
+    def fake_poll(timeout_ms=5000):
+        nonlocal call_count
+        call_count += 1
+        if call_count > 2:
+            raise KeyboardInterrupt
+        return {}
+
+    mock_consumer.poll = fake_poll
+
+    # Simulate enough time elapsed (> 30 min = 1800s)
+    monotonic_values = [0.0, 1801.0, 1801.0, 1801.0]
+    monotonic_iter = iter(monotonic_values)
+
+    with (
+        patch(
+            "data_engineering.pipeline.streaming.time.monotonic",
+            side_effect=lambda: next(monotonic_iter),
+        ),
+        patch("data_engineering.pipeline.streaming.run_backfill") as mock_backfill,
+    ):
+        try:
+            from data_engineering.pipeline.streaming import _consume_loop
+
+            _consume_loop(mock_consumer)
+        except (KeyboardInterrupt, StopIteration):
+            pass
+
+    mock_backfill.assert_called_once()
+
+
+def test_periodic_backfill_does_not_trigger_before_interval():
+    """Periodic backfill should NOT run before interval elapsed."""
+    mock_consumer = MagicMock()
+    call_count = 0
+
+    def fake_poll(timeout_ms=5000):
+        nonlocal call_count
+        call_count += 1
+        if call_count > 1:
+            raise KeyboardInterrupt
+        return {}
+
+    mock_consumer.poll = fake_poll
+
+    # Simulate short elapsed time (< 30 min)
+    monotonic_values = [0.0, 60.0, 60.0]
+    monotonic_iter = iter(monotonic_values)
+
+    with (
+        patch(
+            "data_engineering.pipeline.streaming.time.monotonic",
+            side_effect=lambda: next(monotonic_iter),
+        ),
+        patch("data_engineering.pipeline.streaming.run_backfill") as mock_backfill,
+    ):
+        try:
+            from data_engineering.pipeline.streaming import _consume_loop
+
+            _consume_loop(mock_consumer)
+        except (KeyboardInterrupt, StopIteration):
+            pass
+
+    mock_backfill.assert_not_called()

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
@@ -39,7 +41,7 @@ def extract_options(engine: Engine | None = None) -> pd.DataFrame:
     """Extract all poll options."""
     engine = engine or get_engine()
     query = text("""
-        SELECT id, poll_id, option_text
+        SELECT id, poll_id, option_text, created_at
         FROM poll_options
     """)
     with engine.connect() as conn:
@@ -142,3 +144,159 @@ def extract_polls_by_creator(
     """)
     with engine.connect() as conn:
         return pd.read_sql(query, conn, params={"creator_id": creator_id})
+
+
+# ── Incremental extracts (used by backfill for delta detection) ───────────────
+
+
+def extract_polls_since(since: datetime, engine: Engine | None = None) -> pd.DataFrame:
+    """Extract polls created or updated after the given timestamp."""
+    engine = engine or get_engine()
+    query = text("""
+        SELECT p.id, p.title, p.active, p.multi_select, p.expires_at,
+               p.created_at, p.updated_at, p.creator_id, u.full_name AS creator_name
+        FROM polls p
+        JOIN users u ON p.creator_id = u.id
+        WHERE p.updated_at > :since
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"since": since})
+
+
+def extract_votes_since(since: datetime, engine: Engine | None = None) -> pd.DataFrame:
+    """Extract votes created after the given timestamp."""
+    engine = engine or get_engine()
+    query = text("""
+        SELECT id, poll_id, option_id, user_id, created_at
+        FROM votes
+        WHERE created_at > :since
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"since": since})
+
+
+def extract_options_since(
+    since: datetime, engine: Engine | None = None
+) -> pd.DataFrame:
+    """Extract poll options created after the given timestamp."""
+    engine = engine or get_engine()
+    query = text("""
+        SELECT id, poll_id, option_text, created_at
+        FROM poll_options
+        WHERE created_at > :since
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"since": since})
+
+
+def extract_users_since(since: datetime, engine: Engine | None = None) -> pd.DataFrame:
+    """Extract users created or updated after the given timestamp."""
+    engine = engine or get_engine()
+    query = text("""
+        SELECT id, full_name, email, created_at, updated_at
+        FROM users
+        WHERE updated_at > :since
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"since": since})
+
+
+# ── Batch extracts (used by incremental backfill for scoped recompute) ────────
+
+
+def extract_polls_by_ids(
+    poll_ids: list[int], engine: Engine | None = None
+) -> pd.DataFrame:
+    """Extract multiple polls by ID with creator names."""
+    if not poll_ids:
+        return pd.DataFrame()
+    engine = engine or get_engine()
+    query = text("""
+        SELECT p.id, p.title, p.active, p.multi_select, p.expires_at,
+               p.created_at, p.creator_id, u.full_name AS creator_name
+        FROM polls p
+        JOIN users u ON p.creator_id = u.id
+        WHERE p.id = ANY(:ids)
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"ids": poll_ids})
+
+
+def extract_votes_by_polls(
+    poll_ids: list[int], engine: Engine | None = None
+) -> pd.DataFrame:
+    """Extract all votes for multiple polls."""
+    if not poll_ids:
+        return pd.DataFrame()
+    engine = engine or get_engine()
+    query = text("""
+        SELECT id, poll_id, option_id, user_id, created_at
+        FROM votes
+        WHERE poll_id = ANY(:ids)
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"ids": poll_ids})
+
+
+def extract_options_by_polls(
+    poll_ids: list[int], engine: Engine | None = None
+) -> pd.DataFrame:
+    """Extract all options for multiple polls."""
+    if not poll_ids:
+        return pd.DataFrame()
+    engine = engine or get_engine()
+    query = text("""
+        SELECT id, poll_id, option_text
+        FROM poll_options
+        WHERE poll_id = ANY(:ids)
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"ids": poll_ids})
+
+
+def extract_users_by_ids(
+    user_ids: list[int], engine: Engine | None = None
+) -> pd.DataFrame:
+    """Extract multiple users by ID."""
+    if not user_ids:
+        return pd.DataFrame()
+    engine = engine or get_engine()
+    query = text("""
+        SELECT id, full_name, email, created_at
+        FROM users
+        WHERE id = ANY(:ids)
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"ids": user_ids})
+
+
+def extract_votes_by_users(
+    user_ids: list[int], engine: Engine | None = None
+) -> pd.DataFrame:
+    """Extract all votes cast by multiple users."""
+    if not user_ids:
+        return pd.DataFrame()
+    engine = engine or get_engine()
+    query = text("""
+        SELECT id, poll_id, option_id, user_id, created_at
+        FROM votes
+        WHERE user_id = ANY(:ids)
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"ids": user_ids})
+
+
+def extract_polls_by_creators(
+    creator_ids: list[int], engine: Engine | None = None
+) -> pd.DataFrame:
+    """Extract all polls created by multiple users."""
+    if not creator_ids:
+        return pd.DataFrame()
+    engine = engine or get_engine()
+    query = text("""
+        SELECT id, title, active, created_at, creator_id
+        FROM polls
+        WHERE creator_id = ANY(:ids)
+    """)
+    with engine.connect() as conn:
+        return pd.read_sql(query, conn, params={"ids": creator_ids})

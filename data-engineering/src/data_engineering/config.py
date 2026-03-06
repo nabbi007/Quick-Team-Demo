@@ -30,8 +30,17 @@ KAFKA_GROUP_ID: str = config("KAFKA_GROUP_ID", default="quickpoll-analytics")
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 LOG_LEVEL: str = config("LOG_LEVEL", default="INFO")
+BACKFILL_INTERVAL_MINUTES: int = config(
+    "BACKFILL_INTERVAL_MINUTES", default=30, cast=int
+)
+WATERMARK_OVERLAP_MINUTES: int = config(
+    "WATERMARK_OVERLAP_MINUTES", default=5, cast=int
+)
+FORCE_FULL_BACKFILL: bool = (
+    config("FORCE_FULL_BACKFILL", default="false", cast=str).lower() == "true"
+)
 
-# ── Cloudflare R2 (Dead-Letter Queue) ─────────────────────────────────────────
+# ── Cloudflare R2(Dead-Letter Queue) ─────────────────────────────────────────
 R2_ENDPOINT_URL: str = config("R2_ENDPOINT_URL", default="")
 R2_ACCESS_KEY_ID: str = config("R2_ACCESS_KEY_ID", default="")
 R2_SECRET_ACCESS_KEY: str = config("R2_SECRET_ACCESS_KEY", default="")
