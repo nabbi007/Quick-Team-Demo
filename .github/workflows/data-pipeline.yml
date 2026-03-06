@@ -1,0 +1,68 @@
+name: data-engineering-ci
+
+on:
+  push:
+    paths:
+      - "data-engineering/**"
+      - ".github/workflows/data-pipeline.yml"
+  pull_request:
+    paths:
+      - "data-engineering/**"
+      - ".github/workflows/data-pipeline.yml"
+
+concurrency:
+  group: data-engineering-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-tests:
+    name: quality-and-tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: data-engineering
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: data-engineering/.python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.8"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --locked --dev
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Pytest with coverage
+        run: uv run pytest tests/ -v --cov=src/data_engineering --cov-report=term-missing
+
+      - name: Prune uv cache
+        run: uv cache prune --ci
+
+  docker-build:
+    name: docker-build
+    runs-on: ubuntu-latest
+    needs: quality-and-tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build Docker image
+        run: docker build -f data-engineering/Dockerfile -t data-engineering-ci:${{ github.sha }} data-engineering
