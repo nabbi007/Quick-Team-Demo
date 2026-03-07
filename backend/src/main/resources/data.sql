@@ -20,3 +20,9 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO votes (id,poll_id,option_id,user_id,created_at) VALUES
 (1,1,1,1,NOW()),(2,1,2,2,NOW()),(3,2,5,1,NOW()),(4,2,6,2,NOW()),(5,3,8,1,NOW())
 ON CONFLICT DO NOTHING;
+
+-- Reset sequences to avoid duplicate key errors
+SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
+SELECT setval('polls_id_seq', (SELECT MAX(id) FROM polls));
+SELECT setval('poll_options_id_seq', (SELECT MAX(id) FROM poll_options));
+SELECT setval('votes_id_seq', (SELECT MAX(id) FROM votes));

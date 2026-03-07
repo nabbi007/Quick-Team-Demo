@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: quickpoll-postgres
+    environment:
+      POSTGRES_DB: quickpoll
+      POSTGRES_USER: basit
+      POSTGRES_PASSWORD: bece2018
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U basit -d quickpoll"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: quickpoll-app
+    environment:
+      JWT_SECRET: Z29vZC1zZWNyZXQta2V5bG9uZ3NlY3JldGtleXRoYXRzaG91bGRiZXJlcGxhY2Vkd2l0aGVudnZhcmlhYmxl
+      DB_URL: jdbc:postgresql://postgres:5432/quickpoll
+      DB_USERNAME: basit
+      DB_PASSWORD: bece2018
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

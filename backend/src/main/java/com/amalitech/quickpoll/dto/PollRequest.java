@@ -7,10 +7,10 @@ import java.util.List;
 
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class PollRequest {
-    @NotBlank
+    @NotBlank(message = "Question is required")
     private String question;
     private String description;
-    @NotEmpty
+    @NotEmpty(message = "At least one option is required")
     private List<String> options;
     private boolean multipleChoice;
 }
