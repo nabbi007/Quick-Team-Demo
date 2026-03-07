@@ -25,14 +25,12 @@ public class CustomAccessDenied implements AccessDeniedHandler {
         ErrorResponse errorResponse = new ErrorResponse(
                 LocalDateTime.now(),
                 HttpServletResponse.SC_FORBIDDEN,
-                "Access Denied: You don't have permission to access this resource",
-                "Access denied to " + request.getRequestURI(),
+                "Forbidden",
+                "You don't have permission to access this resource",
                 request.getRequestURI()
         );
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
         response.setContentType("application/json");
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
-
-
     }
 }
