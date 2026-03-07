@@ -34,6 +34,10 @@ public class Poll {
     @Builder.Default
     private List<PollOption> options = new ArrayList<>();
 
+    @OneToMany(mappedBy = "poll", cascade = CascadeType.ALL)
+    @Builder.Default
+    private List<PollInvite> invites = new ArrayList<>();
+
     @Column(name = "multi_select")
     private boolean multiSelect;
 
