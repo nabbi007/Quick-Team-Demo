@@ -1,10 +1,10 @@
-import { Injectable } from "@angular/core";
-import { HttpClient } from "@angular/common/http";
-import { Observable } from "rxjs";
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
 
-@Injectable({ providedIn: "root" })
+@Injectable({ providedIn: 'root' })
 export class PollService {
-  private apiUrl = "/api/polls";
+  private apiUrl = 'http://localhost:8080/api/polls';
 
   constructor(private http: HttpClient) {}
 
