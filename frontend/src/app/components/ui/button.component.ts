@@ -28,7 +28,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'outline' 
     :host {
       padding-left: 1rem;
       padding-right: 1rem;
-      border-radius: 9999px;
+      border-radius: var(--radius);
       color: var(--primary-foreground);
       border: none;
       height: 2.5rem;
@@ -110,17 +110,17 @@ export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'outline' 
     }
 
     :host[data-variant='secondary'] {
-      background-color: var(--secondary, #f1f5f9);
-      color: var(--secondary-foreground, #0f172a);
+      background-color: var(--secondary);
+      color: var(--secondary-foreground);
       border: none;
     }
 
     :host[data-variant='secondary'][data-hover] {
-      background-color: var(--ngp-secondary-background-hover, #e2e8f0);
+      background-color: var(--secondary-hover);
     }
 
     :host[data-variant='secondary'][data-press] {
-      background-color: var(--ngp-secondary-background-active, #cbd5e1);
+      background-color: var(--secondary-active);
     }
 
     :host[data-variant='destructive'] {
@@ -161,11 +161,11 @@ export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'outline' 
     }
 
     :host[data-variant='ghost'][data-hover] {
-      background-color: var(--ngp-background-hover);
+      background-color: var(--secondary-hover);
     }
 
     :host[data-variant='ghost'][data-press] {
-      background-color: var(--ngp-background-active);
+      background-color: var(--secondary-active);
     }
 
     :host[data-variant='link'] {

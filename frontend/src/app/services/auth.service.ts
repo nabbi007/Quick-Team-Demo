@@ -5,7 +5,7 @@ import { Observable, tap } from 'rxjs';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly AUTH_TOKEN_KEY = 'quickpoll-auth-token';
-  private readonly apiUrl = 'https://localhost:8080/api/auth';
+  private readonly apiUrl = 'http://localhost:8080/api/auth';
   protected readonly http = inject(HttpClient);
 
   login(email: string, password: string): Observable<any> {
@@ -47,6 +47,7 @@ export class AuthService {
 
   getUser(): any {
     // TODO: fix implementation, discuss with backend.
+    // discuesed - we will fetch from backend
     const user = localStorage.getItem('user');
     return user ? JSON.parse(user) : null;
   }

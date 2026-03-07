@@ -1,14 +1,15 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { PollService } from '@/services/poll.service';
+import { ContentHeaderComponent } from '@/components/ui/content-header.component';
 
 @Component({
   selector: 'app-poll-list',
   standalone: true,
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, ContentHeaderComponent],
   template: `
-    <div style="margin-top:30px">
-      <h1>Active Polls</h1>
+    <div>
+      <app-content-header title="Active Polls" />
       @if (loading) {
         <p>Loading polls...</p>
       } @else if (polls.length === 0) {
@@ -41,7 +42,7 @@ export class PollListComponent implements OnInit {
   polls: any[] = [];
   loading = true;
 
-  constructor(private pollService: PollService) {}
+  private pollService = inject(PollService);
 
   ngOnInit() {
     this.pollService.getAll().subscribe({

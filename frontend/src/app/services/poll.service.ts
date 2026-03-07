@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class PollService {
-  private apiUrl = '/api/polls';
+  private apiUrl = 'http://localhost:8080/api/polls';
 
   constructor(private http: HttpClient) {}
 

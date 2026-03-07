@@ -17,7 +17,7 @@ import { NgpInput } from 'ng-primitives/input';
       outline: none;
       box-sizing: border-box;
       transition: all 200ms ease-out;
-      font-size: 13px
+      font-size: 13px;
     }
 
     :host:focus {

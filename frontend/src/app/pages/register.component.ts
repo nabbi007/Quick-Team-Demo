@@ -1,10 +1,18 @@
 import { Router, RouterLink } from '@angular/router';
 import { Component, inject } from '@angular/core';
-import { AbstractControl, FormBuilder, ValidationErrors, ValidatorFn, Validators, ReactiveFormsModule } from '@angular/forms';
+import {
+  AbstractControl,
+  FormBuilder,
+  ValidationErrors,
+  ValidatorFn,
+  Validators,
+  ReactiveFormsModule,
+} from '@angular/forms';
 
 import { AuthService } from '../services/auth.service';
 import { ButtonComponent } from '@/components/ui/button.component';
 import { InputComponent } from '@/components/ui/input.component';
+import { ComboboxComponent } from '@/components/ui/combobox.component';
 
 const passwordMatchValidator: ValidatorFn = (group: AbstractControl): ValidationErrors | null => {
   const password = group.get('password')?.value;
@@ -15,30 +23,59 @@ const passwordMatchValidator: ValidatorFn = (group: AbstractControl): Validation
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [ButtonComponent, InputComponent, ReactiveFormsModule, RouterLink],
+  imports: [ButtonComponent, InputComponent, ReactiveFormsModule, RouterLink, ComboboxComponent],
   template: `
     <div class="max-w-100 m-15 mx-auto flex flex-col">
       <h1 class="mb-8 text-xl md:text-3xl font-semibold text-center">Welcome to Quickpoll</h1>
       @if (error) {
         <p class="text-destructive text-xs mb-8">{{ error }}</p>
       }
-      <form id="register-form" class="flex flex-col gap-5" [formGroup]="registerForm" (ngSubmit)="onSubmit()">
-        <div>
-          <input
-            app-input
-            type="text"
-            name="name"
-            formControlName="name"
-            placeholder="Full name"
-            required
-          />
-          @if (registerForm.get('name')?.touched && registerForm.get('name')?.invalid) {
-            <div id="name-error" class="form-field-error" role="alert" aria-live="assertive">
-              @if (registerForm.get('name')?.errors?.['required']) {
-                <span>Full name is required.</span>
-              }
-            </div>
-          }
+      <form
+        id="register-form"
+        class="flex flex-col gap-5"
+        [formGroup]="registerForm"
+        (ngSubmit)="onSubmit()"
+      >
+        <div class="flex gap-3">
+          <div class="flex-1">
+            <input
+              app-input
+              type="text"
+              name="firstName"
+              formControlName="firstName"
+              placeholder="First name"
+              required
+            />
+            @if (registerForm.get('firstName')?.touched && registerForm.get('firstName')?.invalid) {
+              <div
+                id="first-name-error"
+                class="form-field-error"
+                role="alert"
+                aria-live="assertive"
+              >
+                @if (registerForm.get('firstName')?.errors?.['required']) {
+                  <span>First name is required.</span>
+                }
+              </div>
+            }
+          </div>
+          <div class="flex-1">
+            <input
+              app-input
+              type="text"
+              name="lastName"
+              formControlName="lastName"
+              placeholder="Last name"
+              required
+            />
+            @if (registerForm.get('lastName')?.touched && registerForm.get('lastName')?.invalid) {
+              <div id="last-name-error" class="form-field-error" role="alert" aria-live="assertive">
+                @if (registerForm.get('lastName')?.errors?.['required']) {
+                  <span>Last name is required.</span>
+                }
+              </div>
+            }
+          </div>
         </div>
 
         <div>
@@ -61,6 +98,8 @@ const passwordMatchValidator: ValidatorFn = (group: AbstractControl): Validation
             </div>
           }
         </div>
+
+        <app-combobox placeholder="Select a department"/>
 
         <div>
           <input
@@ -92,12 +131,24 @@ const passwordMatchValidator: ValidatorFn = (group: AbstractControl): Validation
             placeholder="Confirm password"
             required
           />
-          @if (registerForm.get('confirmPassword')?.touched && (registerForm.get('confirmPassword')?.invalid || registerForm.hasError('passwordMismatch'))) {
-            <div id="confirm-password-error" class="form-field-error" role="alert" aria-live="assertive">
+          @if (
+            registerForm.get('confirmPassword')?.touched &&
+            (registerForm.get('confirmPassword')?.invalid ||
+              registerForm.hasError('passwordMismatch'))
+          ) {
+            <div
+              id="confirm-password-error"
+              class="form-field-error"
+              role="alert"
+              aria-live="assertive"
+            >
               @if (registerForm.get('confirmPassword')?.errors?.['required']) {
                 <span>Please confirm your password.</span>
               }
-              @if (!registerForm.get('confirmPassword')?.errors?.['required'] && registerForm.hasError('passwordMismatch')) {
+              @if (
+                !registerForm.get('confirmPassword')?.errors?.['required'] &&
+                registerForm.hasError('passwordMismatch')
+              ) {
                 <span>Passwords do not match.</span>
               }
             </div>
@@ -108,6 +159,7 @@ const passwordMatchValidator: ValidatorFn = (group: AbstractControl): Validation
           app-button
           type="submit"
           (click)="registerForm.markAllAsTouched()"
+          class="rounded-full!"
         >
           Register
         </button>
@@ -123,7 +175,8 @@ export class RegisterComponent {
   private formBuilder = inject(FormBuilder);
   protected registerForm = this.formBuilder.group(
     {
-      name: ['', [Validators.required]],
+      firstName: ['', [Validators.required]],
+      lastName: ['', [Validators.required]],
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(6)]],
       confirmPassword: ['', [Validators.required]],
@@ -138,9 +191,10 @@ export class RegisterComponent {
   onSubmit() {
     if (this.registerForm.invalid) return;
 
-    const { name, email, password } = this.registerForm.value;
-    this.authService.register(name!, email!, password!).subscribe({
-      next: () => this.router.navigate(['/']),
+    const { firstName, lastName, email, password } = this.registerForm.value;
+    const name = `${firstName!.trim()} ${lastName!.trim()}`;
+    this.authService.register(name, email!, password!).subscribe({
+      next: () => this.router.navigate(['/polls']),
       error: () => (this.error = 'Registration failed. Please try again.'),
     });
   }

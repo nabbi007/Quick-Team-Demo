@@ -1,10 +1,11 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { NgOptimizedImage } from '@angular/common';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, NgOptimizedImage],
   template: `
     <div class="flex min-h-screen">
       <main class="flex-1 grid place-items-center">
@@ -12,10 +13,9 @@ import { RouterOutlet } from '@angular/router';
           <router-outlet />
         </div>
       </main>
-      <div
-        class="w-1/3 max-w-150 max-md:hidden bg-cover bg-center"
-        style="background-image: url('/images/auth-layout-bg.jpg')"
-      ></div>
+      <div class="relative w-1/2 max-md:hidden">
+        <img ngSrc="/images/auth-layout-bg.jpg" fill style="object-fit:cover" alt="" priority />
+      </div>
     </div>
   `,
   styles: `
@@ -25,4 +25,4 @@ import { RouterOutlet } from '@angular/router';
     }
   `,
 })
-export class LayoutComponent {}
+export class AuthLayoutComponent {}

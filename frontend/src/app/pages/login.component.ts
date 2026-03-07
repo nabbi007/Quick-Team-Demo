@@ -58,7 +58,7 @@ import { InputComponent } from '@/components/ui/input.component';
             </div>
           }
         </div>
-        <button app-button variant="primary" type="submit">Continue</button>
+        <button app-button variant="primary" type="submit" class="rounded-full!">Continue</button>
       </form>
       <div class="mt-8 text-center text-xs inline-flex items-center justify-center gap-1">
         <p>Don't have an account?</p>
@@ -92,7 +92,7 @@ export class LoginComponent implements OnInit {
 
     const { email, password } = this.loginForm.value;
     this.authService.login(email!, password!).subscribe({
-      next: () => this.router.navigate(['/']),
+      next: () => this.router.navigate(['/~']),
       error: (err) => (this.error = 'Problem signing in: ' + err.message),
     });
   }
