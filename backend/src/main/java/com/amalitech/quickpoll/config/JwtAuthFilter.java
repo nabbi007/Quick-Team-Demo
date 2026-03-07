@@ -1,5 +1,6 @@
 package com.amalitech.quickpoll.config;
 
+import com.amalitech.quickpoll.model.enums.Role;
 import com.amalitech.quickpoll.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -46,7 +47,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             userRepository.findByEmail(email).ifPresent(user -> {
                 var auth = new UsernamePasswordAuthenticationToken(
                         user, null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole()))
+                        List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
                 );
                 SecurityContextHolder.getContext().setAuthentication(auth);
             });

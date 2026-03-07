@@ -14,6 +14,11 @@ spring:
       hibernate:
         format_sql: false
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+        generate_statistics: false
   sql:
     init:
       mode: always
@@ -38,4 +43,10 @@ logging:
     org:
       springframework:
         security: DEBUG
-
+      hibernate:
+        engine:
+          jdbc:
+            batch: DEBUG
+polls:
+  scheduler:
+    rate: 360000

@@ -10,7 +10,9 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring", uses = {PollOptionMapper.class})
 public interface PollMapper {
     
+    @Mapping(target = "question", source = "poll.question")
     @Mapping(target = "creatorName", source = "creator.fullName")
+    @Mapping(target = "anonymous", source = "poll.anonymous")
     @Mapping(target = "status", expression = "java(poll.isActive() ? \"ACTIVE\" : \"CLOSED\")")
     @Mapping(target = "multipleChoice", source = "multiSelect")
     @Mapping(target = "options", ignore = true)
@@ -18,14 +20,15 @@ public interface PollMapper {
     PollResponse toResponse(Poll poll);
 
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "title", source = "request.question")
     @Mapping(target = "question", source = "request.question")
     @Mapping(target = "description", source = "request.description")
     @Mapping(target = "multiSelect", source = "request.multipleChoice")
+    @Mapping(target = "anonymous", source = "request.anonymous")
     @Mapping(target = "creator", source = "creator")
     @Mapping(target = "options", ignore = true)
+    @Mapping(target = "invites", ignore = true)
     @Mapping(target = "active", constant = "true")
     @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "expiresAt", ignore = true)
+    @Mapping(target = "expiresAt", source = "request.expiresAt")
     Poll toEntity(PollRequest request, User creator);
 }

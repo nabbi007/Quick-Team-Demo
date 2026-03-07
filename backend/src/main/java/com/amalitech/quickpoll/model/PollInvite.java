@@ -2,19 +2,13 @@ package com.amalitech.quickpoll.model;
 
 import com.amalitech.quickpoll.model.enums.VoteStatus;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "poll_invites")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class PollInvite {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -38,5 +32,18 @@ public class PollInvite {
     @PrePersist
     protected void onCreate() {
         invitedAt = LocalDateTime.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof PollInvite)) return false;
+        PollInvite that = (PollInvite) o;
+        return id != null && id.equals(that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
     }
 }
