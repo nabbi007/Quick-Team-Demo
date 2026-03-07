@@ -63,6 +63,11 @@ def run_streaming() -> None:
             logger.warning("Lost Kafka connection. Reconnecting in %ds...", delay)
             time.sleep(delay)
             delay = min(delay * 2, max_delay)
+        finally:
+            try:
+                consumer.close()
+            except Exception:
+                logger.debug("Error closing Kafka consumer", exc_info=True)
 
 
 def _consume_loop(consumer) -> None:

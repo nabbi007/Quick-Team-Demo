@@ -42,13 +42,16 @@ def test_run_streaming_retries_on_no_brokers():
 def test_run_streaming_reconnects_on_lost_connection():
     """run_streaming should reconnect if Kafka connection drops during consumption."""
     attempt = 0
+    consumers = []
 
     def fake_create_consumer():
         nonlocal attempt
         attempt += 1
         if attempt >= 2:
             raise KeyboardInterrupt
-        return MagicMock()
+        mock = MagicMock()
+        consumers.append(mock)
+        return mock
 
     def fake_consume_loop(consumer):
         raise NoBrokersAvailable()
@@ -73,6 +76,9 @@ def test_run_streaming_reconnects_on_lost_connection():
 
     assert attempt == 2
     mock_sleep.assert_called_once_with(5)
+    # Consumer must be closed after _consume_loop exits
+    assert len(consumers) == 1
+    consumers[0].close.assert_called_once()
 
 
 def test_periodic_backfill_triggers_after_interval():
@@ -184,3 +190,33 @@ def test_commit_failed_error_is_caught_not_fatal():
     # The loop survived 2 polls despite CommitFailedError each time
     assert call_count == 3
     assert mock_consumer.commit.call_count == 2
+
+
+def test_consumer_closed_on_unexpected_error():
+    """Consumer must be closed even when _consume_loop raises unexpectedly."""
+    mock_consumer = MagicMock()
+
+    def fake_create_consumer():
+        return mock_consumer
+
+    def fake_consume_loop(consumer):
+        raise RuntimeError("unexpected crash")
+
+    with (
+        patch(
+            "data_engineering.pipeline.streaming.create_consumer",
+            side_effect=fake_create_consumer,
+        ),
+        patch(
+            "data_engineering.pipeline.streaming._consume_loop",
+            side_effect=fake_consume_loop,
+        ),
+    ):
+        try:
+            from data_engineering.pipeline.streaming import run_streaming
+
+            run_streaming()
+        except RuntimeError:
+            pass
+
+    mock_consumer.close.assert_called_once()
