@@ -17,13 +17,24 @@ scripts:
   # Development
   dev: uv run python main.py
   seed-ai: uv run python scripts/seed_ai_oltp.py
+  seed: uv run python scripts/seed_data.py
+  mock-produce: uv run python scripts/mock_producer.py
+  seed-publish: uv run python scripts/seed_and_publish.py
+
+  # Backfill modes
+  backfill: uv run python main.py
+  backfill-full: uv run python -c "import os; os.environ['FORCE_FULL_BACKFILL']='true'; from main import main; main()"
 
   # Code quality
   lint: uv run ruff check .
   lint-fix: uv run ruff check . --fix
   format: uv run ruff format --check .
   format-fix: uv run ruff format .
-
+  check: uv run ruff check . && uv run ruff format --check .
+  
   # Testing
   test: uv run pytest tests/ -v
   test-cov: uv run pytest tests/ -v --cov=src/data_engineering --cov-report=term-missing
+  test-unit: uv run pytest tests/unit/ -v
+  test-backfill: uv run pytest tests/unit/test_backfill.py tests/unit/test_watermarks.py -v
+  test-streaming: uv run pytest tests/unit/test_streaming.py -v

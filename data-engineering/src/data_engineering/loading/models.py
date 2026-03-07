@@ -66,6 +66,14 @@ analytics_user_participation = Table(
     Column("last_updated", DateTime, server_default=text("NOW()")),
 )
 
+pipeline_watermarks = Table(
+    "pipeline_watermarks",
+    metadata,
+    Column("entity_name", String(50), primary_key=True),
+    Column("high_watermark", DateTime, nullable=False),
+    Column("updated_at", DateTime, server_default=text("NOW()")),
+)
+
 
 def create_analytics_tables(engine: Engine) -> None:
     """Create all analytics tables in PostgreSQL if they don't exist yet."""

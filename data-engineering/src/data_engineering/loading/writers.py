@@ -14,6 +14,7 @@ from data_engineering.loading.models import (
     analytics_poll_summary,
     analytics_user_participation,
     analytics_votes_timeseries,
+    pipeline_watermarks,
 )
 
 logger = logging.getLogger(__name__)
@@ -117,3 +118,33 @@ def upsert_user_participation(df: pd.DataFrame) -> None:
     with get_engine().begin() as conn:
         conn.execute(stmt)
     logger.debug("Upserted %d rows into analytics_user_participation", len(records))
+
+
+def get_watermark(entity_name: str) -> datetime | None:
+    """Return the high-watermark timestamp for the given entity, or None."""
+    with get_engine().connect() as conn:
+        row = conn.execute(
+            pipeline_watermarks.select().where(
+                pipeline_watermarks.c.entity_name == entity_name
+            )
+        ).fetchone()
+    return row.high_watermark if row else None
+
+
+def set_watermark(entity_name: str, value: datetime) -> None:
+    """Upsert the high-watermark for the given entity."""
+    stmt = insert(pipeline_watermarks).values(
+        entity_name=entity_name,
+        high_watermark=value,
+        updated_at=_now(),
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["entity_name"],
+        set_={
+            "high_watermark": stmt.excluded.high_watermark,
+            "updated_at": stmt.excluded.updated_at,
+        },
+    )
+    with get_engine().begin() as conn:
+        conn.execute(stmt)
+    logger.debug("Watermark for '%s' set to %s", entity_name, value)

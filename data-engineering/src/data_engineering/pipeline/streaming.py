@@ -6,8 +6,9 @@ import logging
 import time
 
 import pandas as pd
-from kafka.errors import NoBrokersAvailable
+from kafka.errors import CommitFailedError, NoBrokersAvailable
 
+from data_engineering.config import BACKFILL_INTERVAL_MINUTES
 from data_engineering.ingestion.consumers import create_consumer, write_to_dlq
 from data_engineering.ingestion.extractors import (
     extract_options_by_poll,
@@ -24,6 +25,7 @@ from data_engineering.loading.writers import (
     upsert_user_participation,
     upsert_votes_timeseries,
 )
+from data_engineering.pipeline.backfill import run_backfill
 from data_engineering.transformation.transformers import (
     compute_option_breakdown,
     compute_poll_summary,
@@ -61,27 +63,62 @@ def run_streaming() -> None:
             logger.warning("Lost Kafka connection. Reconnecting in %ds...", delay)
             time.sleep(delay)
             delay = min(delay * 2, max_delay)
+        finally:
+            try:
+                consumer.close()
+            except Exception:
+                logger.debug("Error closing Kafka consumer", exc_info=True)
 
 
 def _consume_loop(consumer) -> None:
-    """Process messages from an already-connected Kafka consumer."""
-    for message in consumer:
-        event = message.value
-        event_type = event.get("event_type") if isinstance(event, dict) else None
-        try:
-            if event_type == "VOTE_CAST":
-                _handle_vote_event(event)
-            elif event_type in ("POLL_CREATED", "POLL_CLOSED"):
-                _handle_poll_event(event)
-            else:
-                logger.warning("Unrecognised event_type=%s — skipping", event_type)
-            consumer.commit()
-        except Exception:
-            logger.exception(
-                "Failed to process event_type=%s — writing to DLQ", event_type
-            )
-            write_to_dlq(event)
-            consumer.commit()
+    """Process messages with periodic backfill check."""
+    backfill_interval_sec = BACKFILL_INTERVAL_MINUTES * 60
+    last_backfill = time.monotonic()
+
+    while True:
+        # Poll for messages (returns dict of TopicPartition → list[ConsumerRecord])
+        records = consumer.poll(timeout_ms=5000)
+
+        for _tp, messages in records.items():
+            for message in messages:
+                event = message.value
+                event_type = (
+                    event.get("event_type") if isinstance(event, dict) else None
+                )
+                try:
+                    if event_type == "VOTE_CAST":
+                        _handle_vote_event(event)
+                    elif event_type in ("POLL_CREATED", "POLL_CLOSED"):
+                        _handle_poll_event(event)
+                    else:
+                        logger.warning(
+                            "Unrecognised event_type=%s — skipping",
+                            event_type,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to process event_type=%s — writing to DLQ", event_type
+                    )
+                    write_to_dlq(event)
+
+        if records:
+            try:
+                consumer.commit()
+            except CommitFailedError:
+                logger.warning(
+                    "Offset commit failed (group rebalanced). "
+                    "Events will be re-delivered on next poll."
+                )
+
+        # Periodic backfill check
+        elapsed = time.monotonic() - last_backfill
+        if elapsed >= backfill_interval_sec:
+            logger.info("Periodic backfill triggered (%.0fs elapsed).", elapsed)
+            try:
+                run_backfill()
+            except Exception:
+                logger.exception("Periodic backfill failed — will retry next interval.")
+            last_backfill = time.monotonic()
 
 
 def _handle_vote_event(event: dict) -> None:
