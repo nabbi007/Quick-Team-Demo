@@ -12,6 +12,7 @@ public class PollResponse {
     private String creatorName;
     private String status;
     private boolean multipleChoice;
+    private boolean anonymous;
     private LocalDateTime createdAt;
     private int totalVotes;
     private List<OptionResponse> options;

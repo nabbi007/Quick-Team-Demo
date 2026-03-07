@@ -43,8 +43,24 @@ public class PollController {
         return ResponseEntity.ok(pollService.createPoll(request, creator));
     }
 
+    @PutMapping("/{id}/close")
+    @Operation(summary = "Close poll", description = "Close a poll to prevent further voting")
+    public ResponseEntity<PollResponse> closePoll(@PathVariable Long id, @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(pollService.closePoll(id, user));
+    }
+
     // TODO: Add vote endpoint - POST /api/polls/{id}/vote
     // TODO: Add close poll endpoint - PUT /api/polls/{id}/close
-     // TODO: Add delete poll endpoint - DELETE /api/polls/{id}
-    // TODO: Add get results endpoint - GET /api/polls/{id}/results
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete poll", description = "Delete a poll by its ID")
+    public ResponseEntity<Void> deletePoll(@PathVariable Long id, @AuthenticationPrincipal User user) {
+        pollService.deletePoll(id, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/results")
+    @Operation(summary = "Get poll results", description = "Retrieve poll results with vote counts and percentages")
+    public ResponseEntity<PollResponse> getPollResults(@PathVariable Long id) {
+        return ResponseEntity.ok(pollService.getPollResults(id));
+    }
 }

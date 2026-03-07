@@ -16,4 +16,7 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     
     @Query("SELECT d FROM Department d LEFT JOIN FETCH d.members WHERE d.id = :id")
     java.util.Optional<Department> findByIdWithMembers(Long id);
+    
+    @Query("SELECT DISTINCT d FROM Department d LEFT JOIN FETCH d.members WHERE d.id IN :ids")
+    List<Department> findAllByIdInWithMembers(List<Long> ids);
 }

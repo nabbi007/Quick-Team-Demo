@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
         @Index(name = "idx_vote_created_at", columnList = "created_at")
     }
 )
-@Data @NoArgsConstructor @AllArgsConstructor
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class Vote {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -38,4 +38,17 @@ public class Vote {
 
     @PrePersist
     protected void onCreate() { createdAt = LocalDateTime.now(); }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Vote)) return false;
+        Vote vote = (Vote) o;
+        return id != null && id.equals(vote.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
 }
