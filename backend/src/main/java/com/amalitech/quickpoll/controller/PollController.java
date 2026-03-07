@@ -45,6 +45,6 @@ public class PollController {
 
     // TODO: Add vote endpoint - POST /api/polls/{id}/vote
     // TODO: Add close poll endpoint - PUT /api/polls/{id}/close
-    // TODO: Add delete poll endpoint - DELETE /api/polls/{id}
+     // TODO: Add delete poll endpoint - DELETE /api/polls/{id}
     // TODO: Add get results endpoint - GET /api/polls/{id}/results
 }
