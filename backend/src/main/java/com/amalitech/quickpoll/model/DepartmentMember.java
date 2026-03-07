@@ -23,6 +23,8 @@ public class DepartmentMember {
     @JoinColumn(name = "department_id")
     private Department department;
 
+    
+
     @OneToMany(mappedBy = "departmentMember", cascade = CascadeType.ALL)
     @Builder.Default
     private List<PollInvite> pollInvites = new ArrayList<>();
