@@ -12,15 +12,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Data @NoArgsConstructor @AllArgsConstructor
+@Data @NoArgsConstructor @AllArgsConstructor @Builder
 public class Department {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(nullable = false)
     private String name;
 
-    private List<String> emails = new ArrayList<>();
-
+    @OneToMany(mappedBy = "department", cascade = CascadeType.ALL)
+    private List<DepartmentMember> members = new ArrayList<>();
 }
 

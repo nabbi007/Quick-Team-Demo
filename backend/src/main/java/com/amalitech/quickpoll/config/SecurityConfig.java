@@ -9,6 +9,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -23,6 +24,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
@@ -37,10 +39,11 @@ public class SecurityConfig {
             config.setAllowedOrigins(Arrays.asList(
                     "http://localhost:4200",
                     "http://localhost:3000",
-                    "http://0.0.0.0:4200"
+                    "http://0.0.0.0:4200",
+                    "http://localhost:8080"
             ));
             config.setAllowedMethods(Arrays.asList("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-            config.setAllowedHeaders(List.of("Authorization","Content-Type","X-Requested-With","Accept"));
+            config.setAllowedHeaders(List.of("*"));
             config.setExposedHeaders(Arrays.asList("Authorization","Set-Cookie"));
             config.setAllowCredentials(true);
             return config;
