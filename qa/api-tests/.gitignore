@@ -113,5 +113,8 @@ gradle-app.setting
 !gradle-wrapper.jar
 !gradle-wrapper.properties
 
+# Kiro specs (local only)
+.kiro/
+
 # Other
 *.orig
