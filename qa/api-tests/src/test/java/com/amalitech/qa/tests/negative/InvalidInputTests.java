@@ -1,6 +1,7 @@
 package com.amalitech.qa.tests.negative;
 
 import com.amalitech.qa.base.BaseTest;
+import com.amalitech.qa.models.TestUser;
 import com.amalitech.qa.models.request.CreateDepartmentRequest;
 import com.amalitech.qa.models.request.CreatePollRequest;
 import com.amalitech.qa.models.request.LoginRequest;
@@ -21,6 +22,22 @@ import java.util.Collections;
  * Negative tests for invalid input handling.
  * Tests API behavior with missing, invalid, or malformed data.
  * 
+ * Expected Error Response Structure:
+ * {
+ *   "statusCode": 400,
+ *   "message": "Validation failed" or specific error message,
+ *   "timestamp": "ISO 8601 datetime",
+ *   "path": "/api/endpoint",
+ *   "details": ["field-specific error messages"] (optional)
+ * }
+ * 
+ * Validation Rules:
+ * - Required fields missing: 400 Bad Request
+ * - Invalid format (email, UUID): 400 Bad Request
+ * - Empty strings for required fields: 400 Bad Request
+ * - Non-existent resources: 404 Not Found
+ * - Error messages should mention the specific field that failed validation
+ * 
  * @author QuickPoll API Testing Framework
  * @version 1.0.0
  */
@@ -32,28 +49,23 @@ public class InvalidInputTests extends BaseTest {
     
     @BeforeEach
     public void authenticateUser() {
-        // Login before tests that require authentication
-        LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
-        );
-        Response loginResponse = apiClient.post("/api/auth/login", loginRequest);
-        if (loginResponse.getStatusCode() == 200) {
-            String token = loginResponse.jsonPath().getString("token");
-            authHandler.setAuthToken(token);
-        }
+        // Register and authenticate test user before tests that require authentication
+        TestUser testUser = userRegistrationService.registerTestUser();
+        authHandler.setAuthToken(testUser.getToken());
     }
     
     @Test
-    @DisplayName("Register with missing email fails")
-    @Description("Verify that registration fails when email is missing")
+    @DisplayName("Register with missing email - should return 400 with validation error")
+    @Description("Verify that registration fails when required email field is missing")
     @Severity(SeverityLevel.NORMAL)
     @Story("Input Validation")
     public void testRegisterWithMissingEmail() {
+        // Expected: 400 Bad Request with error message mentioning email field
+        
         // Arrange
         RegisterRequest registerRequest = new RegisterRequest(
             "Test User",
-            null,
+            null, // Required field missing
             "SecurePass@123"
         );
         
@@ -62,6 +74,18 @@ public class InvalidInputTests extends BaseTest {
         
         // Assert
         TestHelper.assertStatusCode(response, 400);
+        
+        // Verify error message is present and helpful
+        String errorMessage = response.jsonPath().getString("message");
+        org.junit.jupiter.api.Assertions.assertNotNull(errorMessage, 
+            "Error response should contain a message field");
+        
+        // Error should mention the email field
+        String lowerMessage = errorMessage.toLowerCase();
+        org.junit.jupiter.api.Assertions.assertTrue(
+            lowerMessage.contains("email") || lowerMessage.contains("required"),
+            String.format("Error message should mention email field. Got: %s", errorMessage)
+        );
     }
     
     @Test
@@ -106,14 +130,16 @@ public class InvalidInputTests extends BaseTest {
     }
     
     @Test
-    @DisplayName("Create poll with empty question fails")
-    @Description("Verify that poll creation fails when question is empty")
+    @DisplayName("Create poll with empty question - should return 400 with validation error")
+    @Description("Verify that poll creation fails when question is empty (min length = 5)")
     @Severity(SeverityLevel.NORMAL)
     @Story("Input Validation")
     public void testCreatePollWithEmptyQuestion() {
+        // Expected: 400 Bad Request - question has minLength=5 constraint
+        
         // Arrange
         CreatePollRequest pollRequest = new CreatePollRequest(
-            "",
+            "", // Empty string violates minLength=5
             "Test Description",
             Arrays.asList("Option 1", "Option 2"),
             false
@@ -124,6 +150,17 @@ public class InvalidInputTests extends BaseTest {
         
         // Assert
         TestHelper.assertStatusCode(response, 400);
+        
+        // Verify error message mentions question field
+        String errorMessage = response.jsonPath().getString("message");
+        org.junit.jupiter.api.Assertions.assertNotNull(errorMessage, 
+            "Error response should contain a message field");
+        
+        String lowerMessage = errorMessage.toLowerCase();
+        org.junit.jupiter.api.Assertions.assertTrue(
+            lowerMessage.contains("question") || lowerMessage.contains("length") || lowerMessage.contains("required"),
+            String.format("Error message should mention question field constraint. Got: %s", errorMessage)
+        );
     }
     
     @Test
@@ -246,5 +283,54 @@ public class InvalidInputTests extends BaseTest {
         
         // Assert
         TestHelper.assertStatusCode(response, 400);
+    }
+    
+    @Test
+    @DisplayName("Create poll with multiple validation errors - should return detailed error response")
+    @Description("Verify that API returns helpful error details when multiple validation errors occur")
+    @Severity(SeverityLevel.NORMAL)
+    @Story("Input Validation")
+    public void testValidationErrorDetails() {
+        // Expected: 400 Bad Request with error details mentioning specific field failures
+        
+        // Arrange - Create poll with multiple validation errors
+        CreatePollRequest invalidRequest = new CreatePollRequest(
+            "", // Empty question - violates minLength=5
+            "Description",
+            Collections.singletonList("Only Option"), // Only 1 option - violates minItems=2
+            false
+        );
+        
+        // Act
+        Response response = apiClient.post("/api/polls", invalidRequest);
+        
+        // Assert
+        TestHelper.assertStatusCode(response, 400);
+        
+        // Verify error response structure
+        String errorMessage = response.jsonPath().getString("message");
+        org.junit.jupiter.api.Assertions.assertNotNull(errorMessage, 
+            "Error response should contain a message field");
+        
+        // Check if error mentions the validation failures
+        String lowerMessage = errorMessage.toLowerCase();
+        String responseBody = response.getBody().asString().toLowerCase();
+        
+        // Should mention question issue
+        boolean mentionsQuestion = lowerMessage.contains("question") || responseBody.contains("question");
+        
+        // Should mention options issue
+        boolean mentionsOptions = lowerMessage.contains("option") || responseBody.contains("option");
+        
+        org.junit.jupiter.api.Assertions.assertTrue(
+            mentionsQuestion || mentionsOptions,
+            String.format("Error should mention validation failures. Response: %s", response.getBody().asString())
+        );
+        
+        // Verify error response has helpful structure
+        org.junit.jupiter.api.Assertions.assertNotNull(
+            response.jsonPath().get("timestamp"),
+            "Error response should include timestamp"
+        );
     }
 }

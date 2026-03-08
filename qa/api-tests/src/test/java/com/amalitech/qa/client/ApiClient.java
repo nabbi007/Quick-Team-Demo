@@ -37,6 +37,11 @@ public class ApiClient {
     public ApiClient(String baseUrl, AuthenticationHandler authHandler) {
         this.authHandler = authHandler;
         
+        // Set base URL in auth handler for authentication calls
+        if (authHandler != null) {
+            authHandler.setBaseUrl(baseUrl);
+        }
+        
         // Initialize base request specification
         this.baseRequestSpec = new RequestSpecBuilder()
                 .setBaseUri(baseUrl)
@@ -74,15 +79,6 @@ public class ApiClient {
     }
     
     /**
-     * Gets the base response specification.
-     * 
-     * @return the base response specification
-     */
-    public ResponseSpecification getResponseSpec() {
-        return baseResponseSpec;
-    }
-    
-    /**
      * Performs a GET request to the specified endpoint.
      * 
      * @param endpoint the API endpoint path
@@ -91,25 +87,6 @@ public class ApiClient {
     public Response get(String endpoint) {
         logger.info("GET request to endpoint: {}", endpoint);
         return given()
-                .when()
-                .get(endpoint)
-                .then()
-                .spec(baseResponseSpec)
-                .extract()
-                .response();
-    }
-    
-    /**
-     * Performs a GET request with query parameters.
-     * 
-     * @param endpoint the API endpoint path
-     * @param queryParams the query parameters
-     * @return the Response object
-     */
-    public Response get(String endpoint, Map<String, ?> queryParams) {
-        logger.info("GET request to endpoint: {} with query params: {}", endpoint, queryParams);
-        return given()
-                .queryParams(queryParams)
                 .when()
                 .get(endpoint)
                 .then()
@@ -192,16 +169,4 @@ public class ApiClient {
                 .response();
     }
     
-    /**
-     * Performs a DELETE request with a resource ID.
-     * 
-     * @param endpoint the API endpoint path
-     * @param resourceId the resource ID to delete
-     * @return the Response object
-     */
-    public Response delete(String endpoint, String resourceId) {
-        String fullEndpoint = String.format("%s/%s", endpoint, resourceId);
-        logger.info("DELETE request to endpoint: {}", fullEndpoint);
-        return delete(fullEndpoint);
-    }
 }

@@ -17,7 +17,13 @@ import java.util.*;
 public class TestDataManager {
     private static final Logger logger = LoggerFactory.getLogger(TestDataManager.class);
     
+    // Resource type constants
+    public static final String RESOURCE_TYPE_POLL = "poll";
+    public static final String RESOURCE_TYPE_USER = "user";
+    public static final String RESOURCE_TYPE_DEPARTMENT = "department";
+    
     private final List<String> createdResourceIds;
+    private final Map<String, String> resourceTypeMap; // resourceId -> resourceType
     private final ApiClient apiClient;
     
     /**
@@ -28,6 +34,7 @@ public class TestDataManager {
     public TestDataManager(ApiClient apiClient) {
         this.apiClient = apiClient;
         this.createdResourceIds = new ArrayList<>();
+        this.resourceTypeMap = new HashMap<>();
     }
     
     /**
@@ -48,7 +55,7 @@ public class TestDataManager {
         
         if (response.getStatusCode() == 201 || response.getStatusCode() == 200) {
             String pollId = response.jsonPath().getString("id");
-            createdResourceIds.add(pollId);
+            trackResource(RESOURCE_TYPE_POLL, pollId);
             logger.info("Test poll created with ID: {}", pollId);
             return pollId;
         } else {
@@ -59,16 +66,54 @@ public class TestDataManager {
     }
     
     /**
+     * Creates a test poll with authentication token.
+     * 
+     * @param authToken Authentication token
+     * @return the created poll ID
+     */
+    public String createTestPollWithAuth(String authToken) {
+        // The ApiClient will automatically use the token from AuthenticationHandler
+        // This method is provided for explicit test data creation
+        return createTestPollWithDefaults();
+    }
+    
+    /**
+     * Tracks a resource for cleanup.
+     * 
+     * @param resourceType Type of resource (poll, user, department)
+     * @param resourceId ID of the resource
+     */
+    public void trackResource(String resourceType, String resourceId) {
+        if (resourceId != null && !resourceId.isEmpty()) {
+            createdResourceIds.add(resourceId);
+            resourceTypeMap.put(resourceId, resourceType);
+            logger.debug("Tracking {} resource with ID: {}", resourceType, resourceId);
+        }
+    }
+    
+    /**
      * Cleans up all test data created during the test.
      * Executes even if test fails to ensure proper cleanup.
+     * Handles multiple resource types (polls, users, departments).
      */
     public void cleanupTestData() {
+        cleanupAllResources();
+    }
+    
+    /**
+     * Cleans up all tracked resources.
+     * Uses resource type to determine the appropriate cleanup endpoint.
+     */
+    public void cleanupAllResources() {
         logger.info("Starting test data cleanup. Resources to clean: {}", createdResourceIds.size());
         
         for (String resourceId : createdResourceIds) {
             try {
-                logger.debug("Cleaning up resource: {}", resourceId);
-                Response response = apiClient.delete("/api/polls/" + resourceId);
+                String resourceType = resourceTypeMap.getOrDefault(resourceId, RESOURCE_TYPE_POLL);
+                String endpoint = getCleanupEndpoint(resourceType, resourceId);
+                
+                logger.debug("Cleaning up {} resource: {}", resourceType, resourceId);
+                Response response = apiClient.delete(endpoint);
                 
                 if (response.getStatusCode() == 204 || response.getStatusCode() == 200 || response.getStatusCode() == 404) {
                     logger.debug("Resource {} cleaned up successfully", resourceId);
@@ -82,7 +127,29 @@ public class TestDataManager {
         }
         
         createdResourceIds.clear();
+        resourceTypeMap.clear();
         logger.info("Test data cleanup complete");
+    }
+    
+    /**
+     * Gets the appropriate cleanup endpoint for a resource type.
+     * 
+     * @param resourceType the type of resource
+     * @param resourceId the resource ID
+     * @return the cleanup endpoint path
+     */
+    private String getCleanupEndpoint(String resourceType, String resourceId) {
+        switch (resourceType) {
+            case RESOURCE_TYPE_POLL:
+                return "/api/polls/" + resourceId;
+            case RESOURCE_TYPE_USER:
+                return "/api/users/" + resourceId;
+            case RESOURCE_TYPE_DEPARTMENT:
+                return "/api/departments/" + resourceId;
+            default:
+                logger.warn("Unknown resource type: {}, defaulting to poll endpoint", resourceType);
+                return "/api/polls/" + resourceId;
+        }
     }
     
     /**

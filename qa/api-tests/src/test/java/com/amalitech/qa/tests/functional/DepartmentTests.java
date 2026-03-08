@@ -1,9 +1,9 @@
 package com.amalitech.qa.tests.functional;
 
 import com.amalitech.qa.base.BaseTest;
+import com.amalitech.qa.models.TestUser;
 import com.amalitech.qa.models.request.AddEmailsRequest;
 import com.amalitech.qa.models.request.CreateDepartmentRequest;
-import com.amalitech.qa.models.request.LoginRequest;
 import com.amalitech.qa.utils.TestHelper;
 import io.qameta.allure.*;
 import io.restassured.response.Response;
@@ -30,14 +30,10 @@ public class DepartmentTests extends BaseTest {
     
     @BeforeEach
     public void authenticateAdmin() {
-        // Login with admin credentials before each test
-        LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
-        );
-        Response loginResponse = apiClient.post("/api/auth/login", loginRequest);
-        String token = loginResponse.jsonPath().getString("token");
-        authHandler.setAuthToken(token);
+        // Register and authenticate test user before each test
+        // Note: This test may require admin permissions - adjust based on API behavior
+        TestUser testUser = userRegistrationService.registerTestUser();
+        authHandler.setAuthToken(testUser.getToken());
     }
     
     @Test

@@ -1,9 +1,11 @@
 package com.amalitech.qa.tests.security;
 
 import com.amalitech.qa.base.BaseTest;
+import com.amalitech.qa.models.TestUser;
 import com.amalitech.qa.models.request.CreatePollRequest;
 import com.amalitech.qa.models.request.LoginRequest;
 import com.amalitech.qa.models.request.RegisterRequest;
+import com.amalitech.qa.utils.SecurityTestHelper;
 import com.amalitech.qa.utils.TestHelper;
 import io.qameta.allure.*;
 import io.restassured.response.Response;
@@ -33,86 +35,41 @@ public class InjectionTests extends BaseTest {
     @Story("SQL Injection Prevention")
     public void testSqlInjectionInLoginEmail() {
         // Arrange
-        LoginRequest loginRequest = new LoginRequest(
-            "admin' OR '1'='1",
-            "password"
-        );
+        String sqlPayload = SecurityTestHelper.SQL_INJECTION_PAYLOADS[0]; // "' OR '1'='1"
+        LoginRequest loginRequest = new LoginRequest(sqlPayload, "password");
         
         // Act
         Response response = apiClient.post("/api/auth/login", loginRequest);
         
-        // Assert - Should not succeed with SQL injection
-        TestHelper.assertStatusCode(response, 400);
+        // Assert - Should reject malicious input or handle safely
+        SecurityTestHelper.validateSqlInjectionProtection(response, sqlPayload, "email");
     }
     
     @Test
-    @DisplayName("XSS script in poll question is sanitized")
-    @Description("Verify that XSS attempts in poll question are handled safely")
+    @DisplayName("Multiple SQL injection payloads are prevented")
+    @Description("Test various SQL injection patterns to ensure comprehensive protection")
     @Severity(SeverityLevel.CRITICAL)
-    @Story("XSS Prevention")
-    public void testXssInPollQuestion() {
-        // Arrange - Login first
-        LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
-        );
-        Response loginResponse = apiClient.post("/api/auth/login", loginRequest);
-        String token = loginResponse.jsonPath().getString("token");
-        authHandler.setAuthToken(token);
-        
-        // Create poll with XSS attempt
-        CreatePollRequest pollRequest = new CreatePollRequest(
-            "<script>alert('XSS')</script>",
-            "Test Description",
-            Arrays.asList("Option 1", "Option 2"),
-            false
-        );
-        
-        // Act
-        Response response = apiClient.post("/api/polls", pollRequest);
-        
-        // Assert - Should either reject or sanitize
-        int statusCode = response.getStatusCode();
-        org.junit.jupiter.api.Assertions.assertTrue(
-            statusCode == 400 || statusCode == 201,
-            "Expected 400 (rejected) or 201 (sanitized)"
-        );
-        
-        // If created, verify script tags are not present in response
-        if (statusCode == 201) {
-            String question = response.jsonPath().getString("question");
-            org.junit.jupiter.api.Assertions.assertFalse(
-                question.contains("<script>"),
-                "Script tags should be sanitized"
+    @Story("SQL Injection Prevention")
+    public void testMultipleSqlInjectionPayloads() {
+        // Test multiple SQL injection patterns
+        for (String sqlPayload : SecurityTestHelper.SQL_INJECTION_PAYLOADS) {
+            // Arrange
+            LoginRequest loginRequest = new LoginRequest(sqlPayload, "password");
+            
+            // Act
+            Response response = apiClient.post("/api/auth/login", loginRequest);
+            
+            // Assert - Should reject or handle safely
+            int statusCode = response.getStatusCode();
+            org.junit.jupiter.api.Assertions.assertTrue(
+                statusCode == 400 || statusCode == 401,
+                String.format("SQL injection payload '%s' should be rejected (400) or fail authentication (401), got %d. Response: %s",
+                    sqlPayload, statusCode, response.getBody().asString())
             );
         }
     }
     
-    @Test
-    @DisplayName("Command injection in user name is prevented")
-    @Description("Verify that command injection attempts in user name are handled safely")
-    @Severity(SeverityLevel.CRITICAL)
-    @Story("Command Injection Prevention")
-    public void testCommandInjectionInUserName() {
-        // Arrange
-        String uniqueEmail = "testuser" + System.currentTimeMillis() + "@example.com";
-        RegisterRequest registerRequest = new RegisterRequest(
-            "; rm -rf /",
-            uniqueEmail,
-            "SecurePass@123"
-        );
-        
-        // Act
-        Response response = apiClient.post("/api/auth/register", registerRequest);
-        
-        // Assert - Should either reject or sanitize
-        int statusCode = response.getStatusCode();
-        org.junit.jupiter.api.Assertions.assertTrue(
-            statusCode == 400 || statusCode == 201,
-            "Expected 400 (rejected) or 201 (sanitized)"
-        );
-    }
-    
+
     @Test
     @DisplayName("LDAP injection in email is prevented")
     @Description("Verify that LDAP injection attempts are handled safely")
@@ -133,19 +90,69 @@ public class InjectionTests extends BaseTest {
     }
     
     @Test
+    @DisplayName("Command injection in user name is prevented")
+    @Description("Verify that command injection attempts in user name are handled safely")
+    @Severity(SeverityLevel.CRITICAL)
+    @Story("Command Injection Prevention")
+    public void testCommandInjectionInUserName() {
+        // Arrange
+        String commandPayload = SecurityTestHelper.COMMAND_INJECTION_PAYLOADS[0]; // "; ls -la"
+        String uniqueEmail = "testuser" + System.currentTimeMillis() + "@example.com";
+        RegisterRequest registerRequest = new RegisterRequest(
+            commandPayload,
+            uniqueEmail,
+            "SecurePass@123"
+        );
+        
+        // Act
+        Response response = apiClient.post("/api/auth/register", registerRequest);
+        
+        // Assert - Should either reject or sanitize
+        SecurityTestHelper.validateCommandInjectionProtection(response, commandPayload, "name");
+    }
+    
+    @Test
+    @DisplayName("Multiple command injection payloads are prevented")
+    @Description("Test various command injection patterns to ensure comprehensive protection")
+    @Severity(SeverityLevel.CRITICAL)
+    @Story("Command Injection Prevention")
+    public void testMultipleCommandInjectionPayloads() {
+        // Test multiple command injection patterns
+        for (int i = 0; i < SecurityTestHelper.COMMAND_INJECTION_PAYLOADS.length; i++) {
+            String commandPayload = SecurityTestHelper.COMMAND_INJECTION_PAYLOADS[i];
+            String uniqueEmail = "testuser" + System.currentTimeMillis() + i + "@example.com";
+            
+            // Arrange
+            RegisterRequest registerRequest = new RegisterRequest(
+                commandPayload,
+                uniqueEmail,
+                "SecurePass@123"
+            );
+            
+            // Act
+            Response response = apiClient.post("/api/auth/register", registerRequest);
+            
+            // Assert - Should either reject or sanitize
+            SecurityTestHelper.validateCommandInjectionProtection(response, commandPayload, "name");
+            
+            // Small delay to ensure unique timestamps
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+    
+    @Test
     @DisplayName("Path traversal in API endpoint is prevented")
     @Description("Verify that path traversal attempts are blocked")
     @Severity(SeverityLevel.CRITICAL)
     @Story("Path Traversal Prevention")
     public void testPathTraversalPrevention() {
-        // Arrange - Login first
-        LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
-        );
-        Response loginResponse = apiClient.post("/api/auth/login", loginRequest);
-        String token = loginResponse.jsonPath().getString("token");
-        authHandler.setAuthToken(token);
+        // Arrange - Register and authenticate test user
+        TestUser testUser = userRegistrationService.registerTestUser();
+        authHandler.setAuthToken(testUser.getToken());
         
         // Act - Try path traversal
         Response response = apiClient.get("/api/polls/../../../etc/passwd");

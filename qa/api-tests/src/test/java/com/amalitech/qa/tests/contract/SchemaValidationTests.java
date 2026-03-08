@@ -1,9 +1,10 @@
 package com.amalitech.qa.tests.contract;
 
 import com.amalitech.qa.base.BaseTest;
+import com.amalitech.qa.models.TestUser;
 import com.amalitech.qa.models.request.CreatePollRequest;
-import com.amalitech.qa.models.request.LoginRequest;
 import com.amalitech.qa.models.request.VoteRequest;
+import com.amalitech.qa.utils.SchemaValidator;
 import com.amalitech.qa.utils.TestHelper;
 import io.qameta.allure.*;
 import io.restassured.module.jsv.JsonSchemaValidator;
@@ -15,6 +16,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.List;
+
+import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Contract tests for API response schema validation.
@@ -31,14 +36,9 @@ public class SchemaValidationTests extends BaseTest {
     
     @BeforeEach
     public void authenticateUser() {
-        // Login before each test
-        LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
-        );
-        Response loginResponse = apiClient.post("/api/auth/login", loginRequest);
-        String token = loginResponse.jsonPath().getString("token");
-        authHandler.setAuthToken(token);
+        // Register and authenticate test user before each test
+        TestUser testUser = userRegistrationService.registerTestUser();
+        authHandler.setAuthToken(testUser.getToken());
     }
     
     @Test
@@ -114,17 +114,55 @@ public class SchemaValidationTests extends BaseTest {
     }
     
     @Test
-    @DisplayName("Poll list response is valid array")
-    @Description("Verify that getting all polls returns a valid array structure")
-    @Severity(SeverityLevel.NORMAL)
+    @DisplayName("Poll list response matches paginated schema")
+    @Description("Verify that getting all polls returns a paginated response structure with content array and pagination metadata")
+    @Severity(SeverityLevel.CRITICAL)
     @Story("Schema Validation")
-    public void testPollListResponseStructure() {
+    public void testPollListPaginatedResponseSchema() {
         // Act
         Response response = apiClient.get("/api/polls");
         
         // Assert
         TestHelper.assertStatusCode(response, 200);
-        response.then().assertThat().body("$", org.hamcrest.Matchers.instanceOf(java.util.List.class));
+        
+        // Validate paginated response structure (Spring Data Page format)
+        SchemaValidator.validatePaginatedResponse(response, 
+            "src/test/resources/schemas/poll-response-schema.json");
+        
+        // Verify pagination fields are present and valid
+        response.then()
+            .body("content", instanceOf(List.class))
+            .body("totalPages", notNullValue())
+            .body("totalElements", greaterThanOrEqualTo(0));
+        
+        // Validate against full paginated schema
+        response.then().assertThat().body(
+            JsonSchemaValidator.matchesJsonSchema(
+                new File("src/test/resources/schemas/paginated-poll-response-schema.json")
+            )
+        );
+    }
+    
+    @Test
+    @DisplayName("Simple array fails paginated validation")
+    @Description("Verify that a simple array response is correctly rejected by paginated validator")
+    @Severity(SeverityLevel.NORMAL)
+    @Story("Schema Validation")
+    public void testSimpleArrayRejection() {
+        // This test verifies that the validator correctly identifies non-paginated responses
+        // We'll use the department endpoint which returns a simple array
+        Response response = apiClient.get("/api/departments");
+        
+        TestHelper.assertStatusCode(response, 200);
+        
+        // Verify it's a simple array (not paginated)
+        Object body = response.jsonPath().get("$");
+        assertTrue(body instanceof List, "Department response should be a simple array");
+        
+        // Verify that paginated validation correctly fails for simple arrays
+        boolean validationFailed = SchemaValidator.validateSimpleArrayRejection(response);
+        assertTrue(validationFailed, 
+            "Paginated validator should reject simple array responses");
     }
     
     @Test

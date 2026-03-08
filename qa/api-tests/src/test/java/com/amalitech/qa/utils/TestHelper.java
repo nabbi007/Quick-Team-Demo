@@ -1,13 +1,9 @@
 package com.amalitech.qa.utils;
 
+import io.qameta.allure.Step;
 import io.restassured.response.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -33,6 +29,7 @@ public class TestHelper {
      * @param response the API response
      * @param expectedCode the expected status code
      */
+    @Step("Assert response status code is {expectedCode}")
     public static void assertStatusCode(Response response, int expectedCode) {
         int actualCode = response.getStatusCode();
         assertEquals(expectedCode, actualCode,
@@ -48,6 +45,7 @@ public class TestHelper {
      * @param key the JSON path key
      * @param expectedValue the expected value
      */
+    @Step("Assert response contains {key} = {expectedValue}")
     public static void assertResponseContains(Response response, String key, Object expectedValue) {
         Object actualValue = response.jsonPath().get(key);
         assertEquals(expectedValue, actualValue,
@@ -61,6 +59,7 @@ public class TestHelper {
      * @param response the API response
      * @param key the JSON path key
      */
+    @Step("Assert response field {key} is not null")
     public static void assertResponseNotNull(Response response, String key) {
         Object value = response.jsonPath().get(key);
         assertNotNull(value,
@@ -99,41 +98,6 @@ public class TestHelper {
     }
     
     /**
-     * Asserts that a date string matches the expected format.
-     * 
-     * @param dateString the date string to validate
-     * @param format the expected date format pattern
-     */
-    public static void assertDateFormat(String dateString, String format) {
-        assertNotNull(dateString, "Date string should not be null");
-        
-        try {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
-            LocalDateTime.parse(dateString, formatter);
-            logger.debug("Date format assertion passed for: {}", dateString);
-        } catch (DateTimeParseException e) {
-            fail(String.format("Date string '%s' does not match expected format '%s'",
-                    dateString, format));
-        }
-    }
-    
-    /**
-     * Asserts that a string is a valid UUID.
-     * 
-     * @param uuid the string to validate as UUID
-     */
-    public static void assertValidUUID(String uuid) {
-        assertNotNull(uuid, "UUID should not be null");
-        
-        try {
-            UUID.fromString(uuid);
-            logger.debug("Valid UUID assertion passed for: {}", uuid);
-        } catch (IllegalArgumentException e) {
-            fail(String.format("String '%s' is not a valid UUID", uuid));
-        }
-    }
-    
-    /**
      * Asserts that the response time is within the specified threshold.
      * 
      * @param response the API response
@@ -162,16 +126,39 @@ public class TestHelper {
     }
     
     /**
-     * Asserts that a response field is a positive integer.
+     * Asserts that authentication is required for the endpoint.
+     * Verifies that the response returns 401 Unauthorized when no authentication is provided.
+     * 
+     * HTTP 401 Unauthorized indicates that the request lacks valid authentication credentials.
+     * This is different from 403 Forbidden, which means the user is authenticated but lacks permissions.
      * 
      * @param response the API response
-     * @param key the JSON path key
      */
-    public static void assertPositiveInteger(Response response, String key) {
-        Integer value = response.jsonPath().getInt(key);
-        assertNotNull(value, String.format("Field '%s' should not be null", key));
-        assertTrue(value > 0,
-                String.format("Field '%s' should be positive but got %d", key, value));
-        logger.debug("Positive integer assertion passed for key: {}", key);
+    @Step("Assert authentication is required (401 Unauthorized)")
+    public static void assertAuthenticationRequired(Response response) {
+        int actualCode = response.getStatusCode();
+        assertEquals(401, actualCode,
+                String.format("Expected 401 Unauthorized (authentication required) but got %d. " +
+                        "Response body: %s", actualCode, response.getBody().asString()));
+        logger.debug("Authentication required assertion passed (401 Unauthorized)");
+    }
+    
+    /**
+     * Asserts that authorization failed for the endpoint.
+     * Verifies that the response returns 403 Forbidden when the user is authenticated but lacks permissions.
+     * 
+     * HTTP 403 Forbidden indicates that the server understood the request but refuses to authorize it.
+     * The user is authenticated (has valid credentials) but doesn't have sufficient permissions.
+     * This is different from 401 Unauthorized, which means no valid authentication was provided.
+     * 
+     * @param response the API response
+     */
+    @Step("Assert authorization failed (403 Forbidden)")
+    public static void assertAuthorizationFailed(Response response) {
+        int actualCode = response.getStatusCode();
+        assertEquals(403, actualCode,
+                String.format("Expected 403 Forbidden (insufficient permissions) but got %d. " +
+                        "Response body: %s", actualCode, response.getBody().asString()));
+        logger.debug("Authorization failed assertion passed (403 Forbidden)");
     }
 }

@@ -1,6 +1,7 @@
 package com.amalitech.qa.tests.performance;
 
 import com.amalitech.qa.base.BaseTest;
+import com.amalitech.qa.models.TestUser;
 import com.amalitech.qa.models.request.CreatePollRequest;
 import com.amalitech.qa.models.request.LoginRequest;
 import com.amalitech.qa.utils.TestHelper;
@@ -32,14 +33,9 @@ public class ResponseTimeTests extends BaseTest {
     
     @BeforeEach
     public void authenticateUser() {
-        // Login before each test
-        LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
-        );
-        Response loginResponse = apiClient.post("/api/auth/login", loginRequest);
-        String token = loginResponse.jsonPath().getString("token");
-        authHandler.setAuthToken(token);
+        // Register and authenticate test user before each test
+        TestUser testUser = userRegistrationService.registerTestUser();
+        authHandler.setAuthToken(testUser.getToken());
     }
     
     @Test
@@ -48,10 +44,11 @@ public class ResponseTimeTests extends BaseTest {
     @Severity(SeverityLevel.NORMAL)
     @Story("Response Time")
     public void testLoginResponseTime() {
-        // Arrange
+        // Arrange - Use the test user that was registered in @BeforeEach
+        TestUser testUser = userRegistrationService.getCurrentTestUser();
         LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
+            testUser.getEmail(),
+            testUser.getPassword()
         );
         
         // Act
