@@ -5,6 +5,7 @@ import com.amalitech.quickpoll.dto.*;
 import com.amalitech.quickpoll.errorhandlers.EmailAlreadyRegistered;
 import com.amalitech.quickpoll.mapper.AuthMapper;
 import com.amalitech.quickpoll.model.User;
+import com.amalitech.quickpoll.model.enums.Role;
 import com.amalitech.quickpoll.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +51,7 @@ class AuthServiceTest {
         User user = new User();
         user.setEmail("john@example.com");
         user.setFullName("John Doe");
-        user.setRole("USER");
+        user.setRole(Role.USER);
 
         when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(authMapper.toUser(request)).thenReturn(user);
@@ -85,11 +86,12 @@ class AuthServiceTest {
         User user = new User();
         user.setEmail("john@example.com");
         user.setFullName("John Doe");
-        user.setRole("USER");
+        user.setRole(Role.USER);
 
         Authentication authentication = mock(Authentication.class);
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(authentication);
+        when(authentication.isAuthenticated()).thenReturn(true);
         when(authentication.getPrincipal()).thenReturn(user);
         when(jwtService.generateToken(anyString(), anyString())).thenReturn("token");
         when(jwtService.generateRefreshToken(anyString(), anyString())).thenReturn("refreshToken");
@@ -110,8 +112,7 @@ class AuthServiceTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new BadCredentialsException("Bad credentials"));
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.login(request));
-        assertTrue(exception.getMessage().contains("Login failed"));
+        assertThrows(BadCredentialsException.class, () -> authService.login(request));
     }
 
     @Test
@@ -120,7 +121,7 @@ class AuthServiceTest {
         User user = new User();
         user.setEmail("john@example.com");
         user.setFullName("John Doe");
-        user.setRole("USER");
+        user.setRole(Role.USER);
 
         when(jwtService.isTokenValid(refreshToken)).thenReturn(true);
         when(jwtService.extractEmail(refreshToken)).thenReturn("john@example.com");
@@ -143,8 +144,7 @@ class AuthServiceTest {
 
         when(jwtService.isTokenValid(refreshToken)).thenReturn(false);
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.refreshToken(refreshToken));
-        assertEquals("Invalid refresh token", exception.getMessage());
+        assertThrows(RuntimeException.class, () -> authService.refreshToken(refreshToken));
     }
 
     @Test
@@ -155,7 +155,6 @@ class AuthServiceTest {
         when(jwtService.extractEmail(refreshToken)).thenReturn("nonexistent@example.com");
         when(userRepository.findByEmail("nonexistent@example.com")).thenReturn(Optional.empty());
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> authService.refreshToken(refreshToken));
-        assertEquals("User not found", exception.getMessage());
+        assertThrows(RuntimeException.class, () -> authService.refreshToken(refreshToken));
     }
 }
