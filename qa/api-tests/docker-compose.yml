@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  api-test-framework:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quickpoll-api-tests
+    ports:
+      - "5050:5050"
+    environment:
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    volumes:
+      # Mount config files if you need to override them
+      - ./src/test/resources/config:/app/config:ro
+      # Optional: Mount allure-results to persist between runs
+      - allure-results:/app/allure-results
+    networks:
+      - test-network
+    restart: unless-stopped
+
+volumes:
+  allure-results:
+    driver: local
+
+networks:
+  test-network:
+    driver: bridge
