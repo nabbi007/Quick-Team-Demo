@@ -16,7 +16,9 @@ scripts:
 
   # Development
   dev: uv run python main.py
-  seed-ai: uv run python scripts/seed_ai_oltp.py
+  seed-ai: uv run python scripts/seed_ai_oltp.py --profile small
+  seed-ai-small-10: uv run python scripts/seed_ai_oltp.py --profile small --chunks 10
+  seed-ai-70b: uv run python scripts/seed_ai_oltp.py --model llama-3.3-70b-versatile --fallback-model llama-3.3-70b-versatile
   seed: uv run python scripts/seed_data.py
   mock-produce: uv run python scripts/mock_producer.py
   seed-publish: uv run python scripts/seed_and_publish.py

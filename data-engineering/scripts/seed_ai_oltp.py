@@ -167,11 +167,15 @@ def _log_summary(
     )
     if verification is not None:
         logger.info(
-            "[verify] users=%d polls=%d poll_options=%d votes=%d",
+            "[verify] users=%d polls=%d poll_options=%d votes=%d "
+            "department=%d department_members=%d poll_invites=%d",
             verification["users"],
             verification["polls"],
             verification["poll_options"],
             verification["votes"],
+            verification.get("department", 0),
+            verification.get("department_members", 0),
+            verification.get("poll_invites", 0),
         )
         logger.info(
             "[verify] duplicate_vote_pairs=%d orphan_poll_options=%d orphan_votes=%d",

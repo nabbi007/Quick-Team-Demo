@@ -32,7 +32,7 @@ def _valid_chunk() -> SeedChunk:
         polls=[
             SeedPoll(
                 ref="p1",
-                title="Favourite weekend activity?",
+                title="Weekend plans",
                 question="What do you enjoy most on weekends?",
                 description=(
                     "Pick the option that matches your typical weekend routine."
@@ -94,7 +94,7 @@ def test_validate_chunk_rejects_option_poll_mismatch() -> None:
         polls=[
             SeedPoll(
                 ref="p1",
-                title="Poll 1",
+                title="Question one",
                 question="Question 1?",
                 description="Description 1",
                 creator_ref="u1",
@@ -102,7 +102,7 @@ def test_validate_chunk_rejects_option_poll_mismatch() -> None:
             ),
             SeedPoll(
                 ref="p2",
-                title="Poll 2",
+                title="Question two",
                 question="Question 2?",
                 description="Description 2",
                 creator_ref="u1",
@@ -166,11 +166,45 @@ def _create_sqlite_seed_schema() -> object:
         conn.execute(
             text(
                 """
+                CREATE TABLE department (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE department_members (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT,
+                    department_id INTEGER
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
                 CREATE TABLE poll_options (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     option_text TEXT,
                     vote_count INTEGER DEFAULT 0,
                     poll_id INTEGER
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE poll_invites (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    poll_id INTEGER,
+                    department_member_id INTEGER,
+                    invited_at TIMESTAMP,
+                    vote_status TEXT
                 )
                 """
             )
@@ -213,7 +247,7 @@ def test_insert_seed_chunk_handles_existing_emails_without_unique_constraints() 
             polls=[
                 SeedPoll(
                     ref="p2",
-                    title="Best coding snack?",
+                    title="Snack preference",
                     question="Which snack helps you focus most?",
                     description="Pick one preferred snack.",
                     creator_ref="u3",
@@ -252,3 +286,16 @@ def test_verify_oltp_state_detects_vote_count_mismatch() -> None:
 
     verification = verify_oltp_state(engine)
     assert verification["vote_count_mismatch_rows"] > 0
+
+
+def test_insert_seed_chunk_populates_department_tables() -> None:
+    engine = _create_sqlite_seed_schema()
+    stats = SeedRunStats()
+    chunk = validate_and_normalize_chunk(_valid_chunk())
+
+    with engine.begin() as conn:
+        insert_seed_chunk(conn=conn, chunk=chunk, stats=stats)
+
+    verification = verify_oltp_state(engine)
+    assert verification["department"] > 0
+    assert verification["department_members"] > 0

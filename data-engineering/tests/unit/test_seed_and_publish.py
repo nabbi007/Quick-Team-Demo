@@ -59,8 +59,11 @@ class TestGeneratePolls:
         expected_fields = (
             "id",
             "title",
+            "question",
             "description",
             "creator_id",
+            "multi_select",
+            "active",
             "options",
             "created_at",
             "expires_at",
@@ -134,8 +137,11 @@ class TestKafkaEventSchemas:
     def _make_poll(self) -> dict:
         return {
             "id": 42,
+            "title": "Team tooling preference",
             "creator_id": 7,
-            "title": "Test poll",
+            "question": "Test poll question?",
+            "multi_select": False,
+            "active": True,
             "expires_at": "2026-12-31T23:59:59+00:00",
             "created_at": "2026-01-01T00:00:00+00:00",
         }
@@ -159,11 +165,7 @@ class TestKafkaEventSchemas:
             "event_type",
             "poll_id",
             "creator_id",
-            "title",
-            "poll_type",
-            "status",
-            "expires_at",
-            "created_at",
+            "occurred_at",
         }
         assert required.issubset(set(event.keys()))
         assert event["event_type"] == "POLL_CREATED"

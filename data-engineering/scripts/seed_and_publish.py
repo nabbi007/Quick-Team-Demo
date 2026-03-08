@@ -126,6 +126,11 @@ _PW_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
 # ── Data generation ──────────────────────────────────────────────────────────
 
 
+def _iso_utc_now() -> str:
+    """Return an ISO-8601 UTC timestamp with Z suffix."""
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
 def generate_users(count: int, start_id: int) -> list[dict]:
     """Generate random user dicts starting at *start_id*."""
     users = []
@@ -150,18 +155,25 @@ def generate_polls(count: int, start_id: int, user_ids: list[int]) -> list[dict]
         pid = start_id + i
         template, base_options = random.choice(_POLL_TEMPLATES)
         topic = random.choice(_TOPICS)
-        title = template.format(topic=topic)
+        question = template.format(topic=topic)
+        title = f"Poll about {topic}"
         num_options = random.randint(3, min(5, len(base_options)))
         options = random.sample(base_options, num_options)
+        created_at = _iso_utc_now()
         polls.append(
             {
                 "id": pid,
                 "title": title,
+                "question": question,
                 "description": f"A poll about {topic}",
                 "creator_id": random.choice(user_ids),
+                "multi_select": bool(random.choice([False, False, True])),
+                "active": True,
                 "options": [{"text": opt} for opt in options],
-                "created_at": datetime.now(UTC).isoformat(),
-                "expires_at": (datetime.now(UTC) + timedelta(days=30)).isoformat(),
+                "created_at": created_at,
+                "expires_at": (datetime.now(UTC) + timedelta(days=30))
+                .isoformat()
+                .replace("+00:00", "Z"),
             }
         )
     return polls
@@ -203,7 +215,7 @@ def generate_votes(
                     "poll_id": poll["id"],
                     "option_id": chosen_option,
                     "user_id": uid,
-                    "voted_at": datetime.now(UTC).isoformat(),
+                    "voted_at": _iso_utc_now(),
                 }
             )
             vote_id += 1
@@ -236,16 +248,20 @@ def insert_polls(conn, polls: list[dict]) -> int:
         text("""
             INSERT INTO polls (id, title, question, description, creator_id,
                                multi_select, expires_at, active, created_at)
-            VALUES (:id, :title, :title, :description, :creator_id, false,
-                    :expires_at ::timestamptz, true, :created_at ::timestamptz)
+            VALUES (:id, :title, :question, :description, :creator_id, :multi_select,
+                    :expires_at ::timestamptz, :active,
+                    :created_at ::timestamptz)
             ON CONFLICT (id) DO NOTHING
         """),
         [
             {
                 "id": p["id"],
                 "title": p["title"],
+                "question": p["question"],
                 "description": p["description"],
                 "creator_id": p["creator_id"],
+                "multi_select": p["multi_select"],
+                "active": p["active"],
                 "expires_at": p["expires_at"],
                 "created_at": p["created_at"],
             }
@@ -315,14 +331,18 @@ def make_producer() -> KafkaProducer:
 
 
 def publish_poll_created(producer: KafkaProducer, poll: dict) -> None:
+    # Required keys for poll_events: event_type, poll_id, creator_id, occurred_at.
+    # Additional poll metadata is included as optional enrichment.
     event = {
         "event_type": "POLL_CREATED",
         "poll_id": poll["id"],
-        "creator_id": poll["creator_id"],
         "title": poll["title"],
-        "poll_type": "SINGLE",
-        "status": "ACTIVE",
+        "creator_id": poll["creator_id"],
+        "occurred_at": _iso_utc_now(),
+        "question": poll["question"],
+        "multi_select": poll["multi_select"],
         "expires_at": poll["expires_at"],
+        "active": poll["active"],
         "created_at": poll["created_at"],
     }
     producer.send(KAFKA_TOPIC_POLL_EVENTS, value=event)
