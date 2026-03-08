@@ -150,14 +150,14 @@ def extract_polls_by_creator(
 
 
 def extract_polls_since(since: datetime, engine: Engine | None = None) -> pd.DataFrame:
-    """Extract polls created or updated after the given timestamp."""
+    """Extract polls created after the given timestamp."""
     engine = engine or get_engine()
     query = text("""
         SELECT p.id, p.title, p.active, p.multi_select, p.expires_at,
-               p.created_at, p.updated_at, p.creator_id, u.full_name AS creator_name
+               p.created_at, p.creator_id, u.full_name AS creator_name
         FROM polls p
         JOIN users u ON p.creator_id = u.id
-        WHERE p.updated_at > :since
+        WHERE p.created_at > :since
     """)
     with engine.connect() as conn:
         return pd.read_sql(query, conn, params={"since": since})
@@ -176,12 +176,12 @@ def extract_votes_since(since: datetime, engine: Engine | None = None) -> pd.Dat
 
 
 def extract_users_since(since: datetime, engine: Engine | None = None) -> pd.DataFrame:
-    """Extract users created or updated after the given timestamp."""
+    """Extract users created after the given timestamp."""
     engine = engine or get_engine()
     query = text("""
-        SELECT id, full_name, email, created_at, updated_at
+        SELECT id, full_name, email, created_at
         FROM users
-        WHERE updated_at > :since
+        WHERE created_at > :since
     """)
     with engine.connect() as conn:
         return pd.read_sql(query, conn, params={"since": since})

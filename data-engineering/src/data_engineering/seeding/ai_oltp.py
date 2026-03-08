@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, Engine
 
 logger = logging.getLogger(__name__)
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # BCrypt hash for "password123" (same hash used by backend test data)
 DEFAULT_PASSWORD_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
 DEFAULT_GROQ_MODEL = "groq:llama-3.1-8b-instant"
+DEFAULT_DEPARTMENT_NAMES = ("Engineering", "Product", "Operations")
 
 
 class SeedUser(BaseModel):
@@ -39,8 +40,8 @@ class SeedPoll(BaseModel):
     """Synthetic poll with nested options."""
 
     ref: str = Field(description="Temporary reference for FK mapping in this chunk")
-    title: str
     question: str
+    title: str
     description: str
     active: bool = True
     multi_select: bool = False
@@ -397,8 +398,8 @@ def validate_and_normalize_chunk(chunk: SeedChunk) -> SeedChunk:
 
         normalized_poll = SeedPoll(
             ref=poll_ref,
-            title=poll.title.strip(),
-            question=poll.question.strip(),
+            question=poll.question.strip() or (poll.title or "").strip(),
+            title=(poll.title or "").strip() or None,
             description=poll.description.strip(),
             active=bool(poll.active),
             multi_select=bool(poll.multi_select),
@@ -467,6 +468,108 @@ def count_chunk_entities(chunk: SeedChunk) -> dict[str, int]:
         "poll_options": sum(len(poll.options) for poll in chunk.polls),
         "votes": len(chunk.votes),
     }
+
+
+def _table_exists(conn: Connection, table_name: str) -> bool:
+    """Return True if the target table exists in the current database."""
+    return table_name in inspect(conn).get_table_names()
+
+
+def _stable_bucket(value: str, buckets: int) -> int:
+    """Map a string to a deterministic [0, buckets) index."""
+    if buckets <= 0:
+        return 0
+    return sum(value.encode("utf-8")) % buckets
+
+
+def _seed_departments_members_and_invites(
+    conn: Connection,
+    chunk: SeedChunk,
+    poll_ids_by_ref: dict[str, int],
+) -> None:
+    """Populate department, department_members, and poll_invites when tables exist."""
+    required = ("department", "department_members", "poll_invites")
+    if not all(_table_exists(conn, table) for table in required):
+        return
+
+    department_ids: list[int] = []
+    for name in DEFAULT_DEPARTMENT_NAMES:
+        existing_id = conn.execute(
+            text("SELECT id FROM department WHERE name = :name ORDER BY id LIMIT 1"),
+            {"name": name},
+        ).scalar()
+        if existing_id is None:
+            existing_id = conn.execute(
+                text("INSERT INTO department (name) VALUES (:name) RETURNING id"),
+                {"name": name},
+            ).scalar_one()
+        department_ids.append(int(existing_id))
+
+    user_email_by_ref = {u.ref: u.email for u in chunk.users}
+
+    for user in chunk.users:
+        department_id = department_ids[_stable_bucket(user.email, len(department_ids))]
+        existing_member = conn.execute(
+            text(
+                """
+                SELECT id
+                FROM department_members
+                WHERE email = :email AND department_id = :department_id
+                LIMIT 1
+                """
+            ),
+            {"email": user.email, "department_id": department_id},
+        ).scalar()
+        if existing_member is None:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO department_members (email, department_id)
+                    VALUES (:email, :department_id)
+                    """
+                ),
+                {"email": user.email, "department_id": department_id},
+            )
+
+    members = (
+        conn.execute(
+            text(
+                """
+            SELECT id, email
+            FROM department_members
+            ORDER BY id
+            """
+            )
+        )
+        .mappings()
+        .all()
+    )
+
+    for poll in chunk.polls:
+        poll_id = poll_ids_by_ref[poll.ref]
+        creator_email = user_email_by_ref[poll.creator_ref]
+        invited = 0
+        for member in members:
+            if member["email"] == creator_email:
+                continue
+            if invited >= 5:
+                break
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO poll_invites (
+                        poll_id, department_member_id, invited_at, vote_status
+                    )
+                    VALUES (:poll_id, :department_member_id, :invited_at, 'PENDING')
+                    """
+                ),
+                {
+                    "poll_id": poll_id,
+                    "department_member_id": int(member["id"]),
+                    "invited_at": poll.created_at,
+                },
+            )
+            invited += 1
 
 
 def insert_seed_chunk(
@@ -558,6 +661,8 @@ def insert_seed_chunk(
             option_ids_by_ref[option.ref] = int(option_id)
             stats.poll_options.inserted += 1
 
+    _seed_departments_members_and_invites(conn, chunk, poll_ids_by_ref)
+
     for vote in chunk.votes:
         stats.votes.attempted += 1
         poll_id = poll_ids_by_ref[vote.poll_ref]
@@ -604,6 +709,7 @@ def insert_seed_chunk(
 def verify_oltp_state(engine: Engine) -> dict[str, int]:
     """Return post-seed quality checks and key table counts."""
     with engine.connect() as conn:
+        table_names = set(inspect(conn).get_table_names())
         users_count = int(
             conn.execute(text("SELECT COUNT(*) FROM users")).scalar() or 0
         )
@@ -681,11 +787,30 @@ def verify_oltp_state(engine: Engine) -> dict[str, int]:
             or 0
         )
 
+        if {"department", "department_members", "poll_invites"}.issubset(table_names):
+            department_count = int(
+                conn.execute(text("SELECT COUNT(*) FROM department")).scalar() or 0
+            )
+            department_members_count = int(
+                conn.execute(text("SELECT COUNT(*) FROM department_members")).scalar()
+                or 0
+            )
+            poll_invites_count = int(
+                conn.execute(text("SELECT COUNT(*) FROM poll_invites")).scalar() or 0
+            )
+        else:
+            department_count = 0
+            department_members_count = 0
+            poll_invites_count = 0
+
     return {
         "users": users_count,
         "polls": polls_count,
         "poll_options": options_count,
         "votes": votes_count,
+        "department": department_count,
+        "department_members": department_members_count,
+        "poll_invites": poll_invites_count,
         "duplicate_vote_pairs": duplicate_vote_pairs,
         "orphan_poll_options": orphan_poll_options,
         "orphan_votes": orphan_votes,

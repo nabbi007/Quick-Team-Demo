@@ -245,19 +245,24 @@ rav x seed
 Uses Groq LLMs to generate realistic, diverse test data. Requires `GROQ_API_KEY` in `.env`.
 
 ```powershell
-# Default (1 chunk)
+# Recommended baseline
+rav x seed-ai --profile small
+
+# Same total volume, smaller per-call payloads
+rav x seed-ai --profile small --chunks 10
+
+# More robust model configuration when function calls fail
+rav x seed-ai --model llama-3.3-70b-versatile --fallback-model llama-3.3-70b-versatile
+
+# Equivalent rav shortcuts
 rav x seed-ai
-
-# Larger dataset
-uv run python scripts/seed_ai_oltp.py --profile medium
-
-# Preview without writing to DB
-uv run python scripts/seed_ai_oltp.py --profile small --dry-run
+rav x seed-ai-small-10
+rav x seed-ai-70b
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--profile {tiny,small,medium}` | Data volume (1, 3, or 5 chunks) |
+| `--profile {small,medium,large}` | Data volume profile |
 | `--chunks N` | Override chunk count directly |
 | `--seed 42` | Random seed for prompt variety |
 | `--dry-run` | Generate only, no database writes |
@@ -465,7 +470,12 @@ All commands use the [rav](https://github.com/jmitchel3/rav) task runner. Run fr
 | Command | Description |
 |---------|-------------|
 | `rav x seed` | Insert static test data (5 users, 4 polls, 16 votes) |
-| `rav x seed-ai` | Generate AI-powered test data via Groq |
+| `rav x seed-ai --profile small` | Recommended AI seeding command |
+| `rav x seed-ai --profile small --chunks 10` | Same volume with smaller per-call payloads |
+| `rav x seed-ai --model llama-3.3-70b-versatile --fallback-model llama-3.3-70b-versatile` | Force robust primary/fallback model pair |
+| `rav x seed-ai` | Shortcut for `rav x seed-ai --profile small` |
+| `rav x seed-ai-small-10` | Shortcut for `--profile small --chunks 10` |
+| `rav x seed-ai-70b` | Shortcut for 70b primary + fallback |
 | `rav x seed-publish` | Seed OLTP + publish Kafka events (full E2E testing) |
 | `rav x mock-produce` | Publish mock Kafka events for testing |
 

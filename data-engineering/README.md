@@ -35,6 +35,23 @@ docker build -t data-engineering .
 docker run --rm data-engineering
 ```
 
+### Local Dev Stack (Kafka + Postgres)
+
+```powershell
+docker compose -f docker-compose.kafka-dev.yml up -d
+```
+
+This starts:
+
+- PostgreSQL on `localhost:5432` (`quickpoll` / `quickpoll` / `quickpoll123`)
+- Kafka on `localhost:9092`
+- Zookeeper on `localhost:2181`
+
+The PostgreSQL schema is initialized from `schema.sql` on first startup.
+
+Use `rav x seed` to load baseline sample data. It is self-contained and does
+not require backend `data.sql` to run first.
+
 ## Documentation
 
 - [PIPELINE_ARCHITECTURE.md](PIPELINE_ARCHITECTURE.md)

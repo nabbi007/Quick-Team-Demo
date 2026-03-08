@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
-
 from data_engineering.transformation.transformers import (
     compute_option_breakdown,
     compute_poll_summary,

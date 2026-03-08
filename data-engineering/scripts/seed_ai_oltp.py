@@ -19,8 +19,6 @@ from pathlib import Path
 # Allow running as a script without installing package first.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from decouple import config  # noqa: E402
-
 from data_engineering.config import get_engine  # noqa: E402
 from data_engineering.seeding.ai_oltp import (  # noqa: E402
     SEED_PROFILES,
@@ -35,6 +33,7 @@ from data_engineering.seeding.ai_oltp import (  # noqa: E402
     verify_oltp_state,
 )
 from data_engineering.utils.logging import configure_logging  # noqa: E402
+from decouple import config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -167,11 +166,15 @@ def _log_summary(
     )
     if verification is not None:
         logger.info(
-            "[verify] users=%d polls=%d poll_options=%d votes=%d",
+            "[verify] users=%d polls=%d poll_options=%d votes=%d "
+            "department=%d department_members=%d poll_invites=%d",
             verification["users"],
             verification["polls"],
             verification["poll_options"],
             verification["votes"],
+            verification.get("department", 0),
+            verification.get("department_members", 0),
+            verification.get("poll_invites", 0),
         )
         logger.info(
             "[verify] duplicate_vote_pairs=%d orphan_poll_options=%d orphan_votes=%d",

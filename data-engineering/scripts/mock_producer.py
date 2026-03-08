@@ -20,14 +20,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from kafka import KafkaProducer  # noqa: E402
-
 from data_engineering.config import (  # noqa: E402
     KAFKA_BOOTSTRAP_SERVERS,
     KAFKA_TOPIC_POLL_EVENTS,
     KAFKA_TOPIC_VOTE_EVENTS,
 )
 from data_engineering.utils.logging import configure_logging  # noqa: E402
+from kafka import KafkaProducer  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ def publish_vote_events(producer: KafkaProducer, count: int) -> None:
             "poll_id": poll_id,
             "option_id": random.choice(_OPTION_MAP[poll_id]),
             "user_id": random.choice(_USER_IDS),
-            "voted_at": datetime.now(UTC).isoformat(),
+            "voted_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
         producer.send(KAFKA_TOPIC_VOTE_EVENTS, value=event)
         logger.info("Published VOTE_CAST #%d: poll_id=%d", i, poll_id)
@@ -63,12 +62,14 @@ def publish_poll_event(producer: KafkaProducer) -> None:
     event = {
         "event_type": "POLL_CREATED",
         "poll_id": 99,
+        "title": "Mock Poll Title",
         "creator_id": 1,
-        "title": "Mock poll from producer script",
-        "poll_type": "SINGLE",
-        "status": "ACTIVE",
+        "occurred_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "question": "Mock poll from producer script",
+        "multi_select": False,
         "expires_at": "2026-12-31T23:59:59Z",
-        "created_at": datetime.now(UTC).isoformat(),
+        "active": True,
+        "created_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
     producer.send(KAFKA_TOPIC_POLL_EVENTS, value=event)
     producer.flush()
