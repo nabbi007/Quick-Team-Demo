@@ -1,5 +1,10 @@
 package com.amalitech.qa.client;
 
+import com.amalitech.qa.exceptions.AuthenticationException;
+import com.amalitech.qa.models.TestUser;
+import com.amalitech.qa.models.request.LoginRequest;
+import io.restassured.RestAssured;
+import io.restassured.response.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,8 +13,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Handles authentication token management and multi-role support for API testing.
- * Manages authentication tokens, credentials, and authorization headers.
+ * Handles authentication token management for API testing.
+ * Manages authentication tokens and authorization headers.
+ * Makes actual API calls for authentication instead of using hardcoded credentials.
  * 
  * @author QuickPoll API Testing Framework
  * @version 1.0.0
@@ -19,59 +25,101 @@ public class AuthenticationHandler {
     
     private String currentToken;
     private LocalDateTime tokenExpiration;
-    private final Map<String, UserCredentials> userCredentials;
-    private String currentRole;
+    private String baseUrl;
     
     /**
-     * Constructs a new AuthenticationHandler with predefined user roles.
+     * Constructs a new AuthenticationHandler.
      */
     public AuthenticationHandler() {
-        this.userCredentials = new HashMap<>();
-        initializeUserCredentials();
+        // Base URL will be set when needed
     }
     
     /**
-     * Initializes user credentials for different roles.
-     */
-    private void initializeUserCredentials() {
-        // Admin role
-        userCredentials.put("admin", new UserCredentials("admin_user", "admin_password"));
-        
-        // Regular user role
-        userCredentials.put("user", new UserCredentials("regular_user", "user_password"));
-        
-        // Guest role
-        userCredentials.put("guest", new UserCredentials("guest_user", "guest_password"));
-    }
-    
-    /**
-     * Authenticates with the provided username and password.
-     * In a real implementation, this would call the authentication endpoint.
+     * Sets the base URL for authentication API calls.
      * 
-     * @param username the username
-     * @param password the password
+     * @param baseUrl the base URL
+     */
+    public void setBaseUrl(String baseUrl) {
+        this.baseUrl = baseUrl;
+    }
+    
+    /**
+     * Authenticates with the API using provided credentials.
+     * Makes an actual API call to the login endpoint.
+     * 
+     * @param email User email
+     * @param password User password
      * @return the authentication token
+     * @throws AuthenticationException if authentication fails
      */
-    public String authenticate(String username, String password) {
-        logger.info("Authenticating user: {}", username);
+    public String authenticate(String email, String password) {
+        logger.info("Authenticating user: {}", email);
         
-        // In a real implementation, this would make an API call to get the token
-        // For now, we'll generate a mock token
-        String token = generateMockToken(username);
-        setAuthToken(token);
+        if (baseUrl == null) {
+            throw new AuthenticationException("Base URL not set for authentication");
+        }
         
-        logger.info("Authentication successful for user: {}", username);
-        return token;
+        try {
+            LoginRequest loginRequest = new LoginRequest(email, password);
+            
+            Response response = RestAssured.given()
+                    .baseUri(baseUrl)
+                    .contentType("application/json")
+                    .body(loginRequest)
+                    .when()
+                    .post("/api/auth/login")
+                    .then()
+                    .extract()
+                    .response();
+            
+            if (response.getStatusCode() == 401) {
+                throw new AuthenticationException(
+                    String.format("Authentication failed for user %s. Response: %s", 
+                        email, response.getBody().asString())
+                );
+            }
+            
+            if (response.getStatusCode() != 200) {
+                throw new AuthenticationException(
+                    String.format("Unexpected status %d during authentication. Response: %s", 
+                        response.getStatusCode(), response.getBody().asString())
+                );
+            }
+            
+            String token = response.jsonPath().getString("token");
+            if (token == null || token.isEmpty()) {
+                throw new AuthenticationException(
+                    "Authentication response did not contain a token"
+                );
+            }
+            
+            setAuthToken(token);
+            logger.info("Authentication successful for user: {}", email);
+            return token;
+            
+        } catch (AuthenticationException e) {
+            throw e;
+        } catch (Exception e) {
+            logger.error("Exception during authentication for user: {}", email, e);
+            throw new AuthenticationException("Authentication failed: " + e.getMessage(), e);
+        }
     }
     
     /**
-     * Generates a mock authentication token for testing purposes.
+     * Authenticates using a TestUser object.
+     * Convenience method that extracts credentials from TestUser.
      * 
-     * @param username the username
-     * @return a mock token
+     * @param testUser TestUser with credentials
+     * @return the authentication token
+     * @throws AuthenticationException if authentication fails
      */
-    private String generateMockToken(String username) {
-        return String.format("Bearer_mock_token_%s_%d", username, System.currentTimeMillis());
+    public String authenticateWithTestUser(TestUser testUser) {
+        if (testUser == null) {
+            throw new AuthenticationException("TestUser cannot be null");
+        }
+        
+        logger.info("Authenticating with TestUser: {}", testUser.getEmail());
+        return authenticate(testUser.getEmail(), testUser.getPassword());
     }
     
     /**
@@ -119,7 +167,6 @@ public class AuthenticationHandler {
         logger.debug("Clearing authentication token");
         this.currentToken = null;
         this.tokenExpiration = null;
-        this.currentRole = null;
     }
     
     /**
@@ -131,69 +178,9 @@ public class AuthenticationHandler {
         Map<String, String> headers = new HashMap<>();
         
         if (currentToken != null) {
-            headers.put("Authorization", currentToken);
+            headers.put("Authorization", "Bearer " + currentToken);
         }
         
         return headers;
-    }
-    
-    /**
-     * Logs in as a specific user role and authenticates.
-     * 
-     * @param role the user role (admin, user, guest)
-     * @throws IllegalArgumentException if role is not recognized
-     */
-    public void loginAsUser(String role) {
-        UserCredentials credentials = userCredentials.get(role.toLowerCase());
-        
-        if (credentials == null) {
-            throw new IllegalArgumentException(
-                String.format("Unknown user role: %s. Available roles: admin, user, guest", role)
-            );
-        }
-        
-        logger.info("Logging in as role: {}", role);
-        authenticate(credentials.getUsername(), credentials.getPassword());
-        this.currentRole = role;
-    }
-    
-    /**
-     * Gets the current user role.
-     * 
-     * @return the current role, or null if not logged in
-     */
-    public String getCurrentRole() {
-        return currentRole;
-    }
-    
-    /**
-     * Gets user credentials for a specific role.
-     * 
-     * @param role the user role
-     * @return the user credentials, or null if role not found
-     */
-    public UserCredentials getCredentialsForRole(String role) {
-        return userCredentials.get(role.toLowerCase());
-    }
-    
-    /**
-     * Inner class to store user credentials.
-     */
-    public static class UserCredentials {
-        private final String username;
-        private final String password;
-        
-        public UserCredentials(String username, String password) {
-            this.username = username;
-            this.password = password;
-        }
-        
-        public String getUsername() {
-            return username;
-        }
-        
-        public String getPassword() {
-            return password;
-        }
     }
 }

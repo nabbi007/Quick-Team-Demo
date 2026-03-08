@@ -1,9 +1,9 @@
 package com.amalitech.qa.tests.security;
 
 import com.amalitech.qa.base.BaseTest;
+import com.amalitech.qa.models.TestUser;
 import com.amalitech.qa.models.request.CreateDepartmentRequest;
 import com.amalitech.qa.models.request.CreatePollRequest;
-import com.amalitech.qa.models.request.LoginRequest;
 import com.amalitech.qa.utils.TestHelper;
 import io.qameta.allure.*;
 import io.restassured.response.Response;
@@ -17,6 +17,11 @@ import java.util.Arrays;
  * Security tests for authorization and access control.
  * Tests role-based access control and authentication requirements.
  * 
+ * HTTP Status Code Semantics:
+ * - 401 Unauthorized: No authentication provided, invalid credentials, or expired token
+ * - 403 Forbidden: Valid authentication but insufficient permissions for the operation
+ * - 404 Not Found: Resource doesn't exist (with valid authentication)
+ * 
  * @author QuickPoll API Testing Framework
  * @version 1.0.0
  */
@@ -28,7 +33,7 @@ public class AuthorizationTests extends BaseTest {
     
     @Test
     @DisplayName("Unauthenticated user cannot create poll")
-    @Description("Verify that creating a poll without authentication returns 401")
+    @Description("Verify that creating a poll without authentication returns 401 Unauthorized")
     @Severity(SeverityLevel.CRITICAL)
     @Story("Authentication Required")
     public void testCreatePollWithoutAuth() {
@@ -40,29 +45,29 @@ public class AuthorizationTests extends BaseTest {
             false
         );
         
-        // Act
+        // Act - No authentication token set
         Response response = apiClient.post("/api/polls", pollRequest);
         
-        // Assert
+        // Assert - 401 because no authentication credentials provided
         TestHelper.assertStatusCode(response, 401);
     }
     
     @Test
     @DisplayName("Unauthenticated user cannot access user profile")
-    @Description("Verify that accessing user profile without authentication returns 401")
+    @Description("Verify that accessing user profile without authentication returns 401 Unauthorized")
     @Severity(SeverityLevel.CRITICAL)
     @Story("Authentication Required")
     public void testGetUserProfileWithoutAuth() {
-        // Act
+        // Act - No authentication token set
         Response response = apiClient.get("/api/users/me");
         
-        // Assert
+        // Assert - 401 because no authentication credentials provided
         TestHelper.assertStatusCode(response, 401);
     }
     
     @Test
     @DisplayName("Unauthenticated user cannot create department")
-    @Description("Verify that creating a department without authentication returns 401")
+    @Description("Verify that creating a department without authentication returns 401 Unauthorized")
     @Severity(SeverityLevel.CRITICAL)
     @Story("Authentication Required")
     public void testCreateDepartmentWithoutAuth() {
@@ -72,32 +77,32 @@ public class AuthorizationTests extends BaseTest {
             Arrays.asList("test@example.com")
         );
         
-        // Act
+        // Act - No authentication token set
         Response response = apiClient.post("/api/departments", request);
         
-        // Assert
+        // Assert - 401 because no authentication credentials provided
         TestHelper.assertStatusCode(response, 401);
     }
     
     @Test
     @DisplayName("Invalid token is rejected")
-    @Description("Verify that requests with invalid authentication token are rejected")
+    @Description("Verify that requests with invalid authentication token return 401 Unauthorized")
     @Severity(SeverityLevel.CRITICAL)
     @Story("Token Validation")
     public void testInvalidTokenRejected() {
-        // Arrange
+        // Arrange - Set an invalid token
         authHandler.setAuthToken("invalid.token.here");
         
         // Act
         Response response = apiClient.get("/api/users/me");
         
-        // Assert
+        // Assert - 401 because authentication credentials are invalid
         TestHelper.assertStatusCode(response, 401);
     }
     
     @Test
     @DisplayName("Expired token is rejected")
-    @Description("Verify that requests with expired authentication token are rejected")
+    @Description("Verify that requests with expired authentication token return 401 Unauthorized")
     @Severity(SeverityLevel.NORMAL)
     @Story("Token Validation")
     public void testExpiredTokenRejected() {
@@ -108,24 +113,19 @@ public class AuthorizationTests extends BaseTest {
         // Act
         Response response = apiClient.get("/api/users/me");
         
-        // Assert
+        // Assert - 401 because authentication token is expired
         TestHelper.assertStatusCode(response, 401);
     }
     
     @Test
     @DisplayName("Regular user cannot access admin endpoints")
-    @Description("Verify that regular users cannot access admin-only endpoints")
+    @Description("Verify that regular users cannot access admin-only endpoints - returns 403 Forbidden")
     @Severity(SeverityLevel.CRITICAL)
     @Story("Role-Based Access Control")
     public void testUserCannotAccessAdminEndpoints() {
-        // Arrange - Login as regular user
-        LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
-        );
-        Response loginResponse = apiClient.post("/api/auth/login", loginRequest);
-        String token = loginResponse.jsonPath().getString("token");
-        authHandler.setAuthToken(token);
+        // Arrange - Register and authenticate as regular user
+        TestUser testUser = userRegistrationService.registerTestUser();
+        authHandler.setAuthToken(testUser.getToken());
         
         // Act - Try to create department (admin-only operation)
         CreateDepartmentRequest request = new CreateDepartmentRequest(
@@ -134,12 +134,13 @@ public class AuthorizationTests extends BaseTest {
         );
         Response response = apiClient.post("/api/departments", request);
         
-        // Assert - Should be forbidden if user doesn't have admin role
-        // Note: Adjust expected status code based on actual API behavior
+        // Assert - Should be 403 (forbidden) if user doesn't have admin role
+        // or 201 if the test user happens to have admin permissions
+        // Note: 403 means authenticated but not authorized (insufficient permissions)
         int statusCode = response.getStatusCode();
         org.junit.jupiter.api.Assertions.assertTrue(
             statusCode == 403 || statusCode == 201,
-            "Expected 403 (forbidden) or 201 (if user has admin role)"
+            "Expected 403 (forbidden - insufficient permissions) or 201 (if user has admin role), but got " + statusCode
         );
     }
 }

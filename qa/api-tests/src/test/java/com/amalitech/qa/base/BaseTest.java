@@ -3,8 +3,10 @@ package com.amalitech.qa.base;
 import com.amalitech.qa.client.ApiClient;
 import com.amalitech.qa.client.AuthenticationHandler;
 import com.amalitech.qa.config.ConfigurationManager;
+import com.amalitech.qa.models.TestUser;
 import com.amalitech.qa.services.PerformanceMonitor;
 import com.amalitech.qa.services.TestDataManager;
+import com.amalitech.qa.services.UserRegistrationService;
 import io.restassured.RestAssured;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -28,6 +30,8 @@ public abstract class BaseTest {
     protected AuthenticationHandler authHandler;
     protected TestDataManager testDataManager;
     protected PerformanceMonitor performanceMonitor;
+    protected UserRegistrationService userRegistrationService;
+    protected TestUser currentTestUser;
     
     /**
      * Suite-level setup executed once before all tests in the class.
@@ -49,7 +53,8 @@ public abstract class BaseTest {
     
     /**
      * Test-level setup executed before each test method.
-     * Initializes API client, authentication handler, test data manager, and performance monitor.
+     * Initializes API client, authentication handler, test data manager, 
+     * user registration service, and performance monitor.
      */
     @BeforeEach
     public void setupTest() {
@@ -64,6 +69,9 @@ public abstract class BaseTest {
         // Initialize test data manager
         testDataManager = new TestDataManager(apiClient);
         
+        // Initialize user registration service
+        userRegistrationService = new UserRegistrationService(apiClient);
+        
         // Initialize performance monitor
         performanceMonitor = new PerformanceMonitor();
         
@@ -72,7 +80,8 @@ public abstract class BaseTest {
     
     /**
      * Test-level teardown executed after each test method.
-     * Triggers test data cleanup and clears authentication.
+     * Triggers test data cleanup, user cleanup, and clears authentication.
+     * Ensures cleanup happens even if tests fail.
      */
     @AfterEach
     public void teardownTest() {
@@ -84,6 +93,11 @@ public abstract class BaseTest {
                 testDataManager.cleanupTestData();
             }
             
+            // Cleanup test users
+            if (userRegistrationService != null) {
+                userRegistrationService.cleanupTestUsers();
+            }
+            
             // Clear authentication
             if (authHandler != null) {
                 authHandler.clearToken();
@@ -92,6 +106,7 @@ public abstract class BaseTest {
             logger.info("Test teardown complete");
         } catch (Exception e) {
             logger.error("Error during test teardown", e);
+            // Don't rethrow - allow test to complete even if cleanup fails
         }
     }
     

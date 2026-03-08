@@ -1,6 +1,7 @@
 package com.amalitech.qa.tests.functional;
 
 import com.amalitech.qa.base.BaseTest;
+import com.amalitech.qa.models.TestUser;
 import com.amalitech.qa.models.request.LoginRequest;
 import com.amalitech.qa.models.request.RegisterRequest;
 import com.amalitech.qa.utils.TestHelper;
@@ -52,10 +53,12 @@ public class AuthenticationTests extends BaseTest {
     @Severity(SeverityLevel.CRITICAL)
     @Story("User Login")
     public void testUserLogin() {
-        // Arrange
+        // Arrange - Register a test user first
+        TestUser testUser = userRegistrationService.registerTestUser();
+        
         LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
+            testUser.getEmail(),
+            testUser.getPassword()
         );
         
         // Act
@@ -92,14 +95,9 @@ public class AuthenticationTests extends BaseTest {
     @Severity(SeverityLevel.NORMAL)
     @Story("Token Refresh")
     public void testRefreshToken() {
-        // Arrange - First login to get a token
-        LoginRequest loginRequest = new LoginRequest(
-            "basitmohammed3612@gmail.com",
-            "Bece@2018"
-        );
-        Response loginResponse = apiClient.post("/api/auth/login", loginRequest);
-        String token = loginResponse.jsonPath().getString("token");
-        authHandler.setAuthToken(token);
+        // Arrange - Register and login to get a token
+        TestUser testUser = userRegistrationService.registerTestUser();
+        authHandler.setAuthToken(testUser.getToken());
         
         // Act
         Response response = apiClient.post("/api/auth/refresh", "");
