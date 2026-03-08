@@ -116,3 +116,14 @@ gradle-app.setting
 
 # Other
 *.orig
+GEMINI.md
+project-description.md
+quickpoll_user_stories.md
+AGENTS.md
+CLAUDE.md
+skills/
+copilot-instructions.md
+skills-lock.json
+ai-reference-docs/
+PIPELINE_ARCHITECTURE.md
+.gitignore
