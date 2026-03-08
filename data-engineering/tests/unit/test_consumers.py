@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import botocore.exceptions
 import pytest
+
 from data_engineering.config import R2_DLQ_BUCKET
 from data_engineering.ingestion.consumers import check_dlq_bucket, write_to_dlq
 

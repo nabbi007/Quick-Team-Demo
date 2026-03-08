@@ -17,9 +17,10 @@ from pathlib import Path
 # Allow running as a script without installing
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from sqlalchemy import text  # noqa: E402
+
 from data_engineering.config import get_engine  # noqa: E402
 from data_engineering.utils.logging import configure_logging  # noqa: E402
-from sqlalchemy import text  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,13 @@ USERS = [
 
 POLLS = [
     (4, "Cloud", "Favourite cloud provider?", "AWS / GCP / Azure", 1),
-    (5, "Database", "Best database for analytics?", "Postgres / BigQuery / Snowflake", 1),
+    (
+        5,
+        "Database",
+        "Best database for analytics?",
+        "Postgres / BigQuery / Snowflake",
+        1,
+    ),
     (6, "Retro", "Sprint retrospective: overall mood?", "Rate the sprint", 2),
     (7, "Outing", "Next team outing venue?", "Where should we go?", 3),
 ]
@@ -146,8 +153,7 @@ def _validate_seed_references() -> None:
     missing_member_users = sorted({dm[1] for dm in DEPARTMENT_MEMBERS} - user_emails)
     if missing_member_users:
         raise ValueError(
-            "DEPARTMENT_MEMBERS references unknown user emails: "
-            f"{missing_member_users}"
+            f"DEPARTMENT_MEMBERS references unknown user emails: {missing_member_users}"
         )
 
     vote_poll_ids = {v[1] for v in VOTES}
@@ -261,10 +267,14 @@ def seed() -> None:
 
         polls_result = conn.execute(
             text("""
-            INSERT INTO polls (id, title, question, description, creator_id, multi_select,
-                               expires_at, active, created_at)
-            VALUES (:id, :title, :question, :desc, :creator, :multi_select,
-                   NOW() + INTERVAL '30 days', true, NOW())
+            INSERT INTO polls (
+                id, title, question, description, creator_id, multi_select,
+                expires_at, active, created_at
+            )
+            VALUES (
+                :id, :title, :question, :desc, :creator, :multi_select,
+                NOW() + INTERVAL '30 days', true, NOW()
+            )
             ON CONFLICT (id) DO NOTHING
         """),
             [

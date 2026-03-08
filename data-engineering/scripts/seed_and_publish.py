@@ -23,6 +23,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from kafka import KafkaProducer  # noqa: E402
+from kafka.errors import NoBrokersAvailable  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+
 from data_engineering.config import (  # noqa: E402
     KAFKA_BOOTSTRAP_SERVERS,
     KAFKA_TOPIC_POLL_EVENTS,
@@ -30,9 +34,6 @@ from data_engineering.config import (  # noqa: E402
     get_engine,
 )
 from data_engineering.utils.logging import configure_logging  # noqa: E402
-from kafka import KafkaProducer  # noqa: E402
-from kafka.errors import NoBrokersAvailable  # noqa: E402
-from sqlalchemy import text  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

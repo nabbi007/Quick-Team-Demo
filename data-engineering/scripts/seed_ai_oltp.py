@@ -19,6 +19,8 @@ from pathlib import Path
 # Allow running as a script without installing package first.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from decouple import config  # noqa: E402
+
 from data_engineering.config import get_engine  # noqa: E402
 from data_engineering.seeding.ai_oltp import (  # noqa: E402
     SEED_PROFILES,
@@ -33,7 +35,6 @@ from data_engineering.seeding.ai_oltp import (  # noqa: E402
     verify_oltp_state,
 )
 from data_engineering.utils.logging import configure_logging  # noqa: E402
-from decouple import config  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

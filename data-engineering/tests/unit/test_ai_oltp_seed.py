@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
+from sqlalchemy import create_engine, text
+
 from data_engineering.seeding.ai_oltp import (
     SeedChunk,
     SeedPoll,
@@ -19,7 +21,6 @@ from data_engineering.seeding.ai_oltp import (
     validate_and_normalize_chunk,
     verify_oltp_state,
 )
-from sqlalchemy import create_engine, text
 
 
 def _valid_chunk() -> SeedChunk:
