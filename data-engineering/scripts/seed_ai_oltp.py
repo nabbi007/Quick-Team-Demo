@@ -13,7 +13,9 @@ from __future__ import annotations
 import argparse
 import logging
 import random
+import re
 import sys
+import time
 from pathlib import Path
 
 # Allow running as a script without installing package first.
@@ -29,6 +31,7 @@ from data_engineering.seeding.ai_oltp import (  # noqa: E402
     build_model_name,
     build_seed_agent,
     count_chunk_entities,
+    generate_local_seed_chunk,
     generate_validated_chunk,
     get_seed_profile,
     insert_seed_chunk,
@@ -39,6 +42,11 @@ from data_engineering.utils.logging import configure_logging  # noqa: E402
 logger = logging.getLogger(__name__)
 
 _DEFAULT_FALLBACK_MODEL = "groq:llama-3.3-70b-versatile"
+_DEFAULT_RATE_LIMIT_RETRIES = 6
+_RATE_LIMIT_WAIT_RE = re.compile(
+    r"try again in\s+([0-9]+(?:\.[0-9]+)?)s",
+    flags=re.IGNORECASE,
+)
 
 _TOPIC_HINTS = [
     "campus events and student life",
@@ -122,6 +130,26 @@ def _is_model_output_error(exc: Exception) -> bool:
         "structured output",
     )
     return any(token in message for token in tokens)
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    tokens = (
+        "rate limit",
+        "rate_limit_exceeded",
+        "429",
+        "tokens per minute",
+    )
+    return any(token in message for token in tokens)
+
+
+def _extract_retry_wait_seconds(exc: Exception, attempt: int) -> float:
+    message = str(exc)
+    match = _RATE_LIMIT_WAIT_RE.search(message)
+    if match:
+        parsed = float(match.group(1))
+        return max(0.5, min(parsed + 0.25, 20.0))
+    return min(2.0 * attempt, 20.0)
 
 
 def _apply_dry_run_attempted_counts(
@@ -233,40 +261,88 @@ def main() -> None:
             rng_seed=args.seed + chunk_index,
             topic_hint=topic_hint,
         )
-
-        try:
-            chunk = generate_validated_chunk(
-                agent=agent,
-                prompt=prompt,
-                max_retries=args.max_retries,
-                log=logger,
-            )
-        except Exception as exc:
-            if active_model == fallback_model or not _is_model_output_error(exc):
-                raise
-            logger.warning(
-                (
-                    "[generate] chunk=%d switching model from %s to %s "
-                    "after provider structured-output failure: %s"
-                ),
-                chunk_index,
-                active_model,
-                fallback_model,
-                exc,
-            )
-            if fallback_agent is None:
-                fallback_agent = build_seed_agent(
-                    api_key=api_key,
-                    model_name=fallback_model,
+        rate_limit_attempts = 0
+        while True:
+            try:
+                chunk = generate_validated_chunk(
+                    agent=agent,
+                    prompt=prompt,
+                    max_retries=args.max_retries,
+                    target_votes=profile.votes_per_chunk,
+                    rng_seed=args.seed + chunk_index,
+                    log=logger,
                 )
-            agent = fallback_agent
-            active_model = fallback_model
-            chunk = generate_validated_chunk(
-                agent=agent,
-                prompt=prompt,
-                max_retries=args.max_retries,
-                log=logger,
-            )
+                break
+            except Exception as exc:
+                if _is_rate_limit_error(exc):
+                    rate_limit_attempts += 1
+                    if rate_limit_attempts > _DEFAULT_RATE_LIMIT_RETRIES:
+                        logger.warning(
+                            (
+                                "[generate] chunk=%d exhausted rate-limit retries; "
+                                "using local synthetic fallback chunk"
+                            ),
+                            chunk_index,
+                        )
+                        chunk = generate_local_seed_chunk(
+                            profile=profile,
+                            chunk_index=chunk_index,
+                            rng_seed=args.seed + chunk_index,
+                            topic_hint=topic_hint,
+                        )
+                        break
+                    wait_seconds = _extract_retry_wait_seconds(
+                        exc,
+                        attempt=rate_limit_attempts,
+                    )
+                    logger.warning(
+                        (
+                            "[generate] chunk=%d rate-limited on model=%s; "
+                            "sleeping %.2fs before retry (%d/%d)"
+                        ),
+                        chunk_index,
+                        active_model,
+                        wait_seconds,
+                        rate_limit_attempts,
+                        _DEFAULT_RATE_LIMIT_RETRIES,
+                    )
+                    time.sleep(wait_seconds)
+                    continue
+
+                if active_model == fallback_model or not _is_model_output_error(exc):
+                    if _is_model_output_error(exc):
+                        logger.warning(
+                            (
+                                "[generate] chunk=%d model output stayed unstable on "
+                                "fallback model; using local synthetic fallback chunk"
+                            ),
+                            chunk_index,
+                        )
+                        chunk = generate_local_seed_chunk(
+                            profile=profile,
+                            chunk_index=chunk_index,
+                            rng_seed=args.seed + chunk_index,
+                            topic_hint=topic_hint,
+                        )
+                        break
+                    raise
+                logger.warning(
+                    (
+                        "[generate] chunk=%d switching model from %s to %s "
+                        "after provider structured-output failure: %s"
+                    ),
+                    chunk_index,
+                    active_model,
+                    fallback_model,
+                    exc,
+                )
+                if fallback_agent is None:
+                    fallback_agent = build_seed_agent(
+                        api_key=api_key,
+                        model_name=fallback_model,
+                    )
+                agent = fallback_agent
+                active_model = fallback_model
 
         stats.generated_chunks += 1
         stats.validated_chunks += 1
