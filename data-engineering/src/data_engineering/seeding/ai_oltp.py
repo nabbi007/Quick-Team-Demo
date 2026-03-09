@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -17,6 +18,34 @@ logger = logging.getLogger(__name__)
 DEFAULT_PASSWORD_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
 DEFAULT_GROQ_MODEL = "groq:llama-3.1-8b-instant"
 DEFAULT_DEPARTMENT_NAMES = ("Engineering", "Product", "Operations")
+_FALLBACK_FIRST_NAMES = (
+    "Avery",
+    "Jordan",
+    "Taylor",
+    "Morgan",
+    "Cameron",
+    "Riley",
+    "Parker",
+    "Quinn",
+    "Casey",
+    "Hayden",
+    "Rowan",
+    "Skyler",
+)
+_FALLBACK_LAST_NAMES = (
+    "Mensah",
+    "Owusu",
+    "Boateng",
+    "Asante",
+    "Ofori",
+    "Appiah",
+    "Boadu",
+    "Agyeman",
+    "Adu",
+    "Tetteh",
+    "Nartey",
+    "Amankwah",
+)
 
 
 class SeedUser(BaseModel):
@@ -173,7 +202,7 @@ Theme hint: {topic_hint}
 Target sizes for this chunk:
 - users: {profile.users_per_chunk}
 - polls: {profile.polls_per_chunk}
-- votes: {profile.votes_per_chunk}
+- votes: [] (must be an empty list; votes are synthesized downstream)
 
 Rules:
 - Use unique refs within this chunk:
@@ -184,9 +213,8 @@ Rules:
 - Every poll must include:
   title, question, description, active, multi_select, creator_ref, options.
 - Each poll must have 2-5 options and meaningful option text.
-- votes must reference valid user_ref, poll_ref, option_ref.
-- Keep only one vote per (poll_ref, user_ref) pair.
 - Provide created_at timestamps across recent days and expires_at after created_at.
+- Always return votes as an empty list: [].
 """.strip()
 
 
@@ -255,6 +283,8 @@ def generate_validated_chunk(
     agent: Any,
     prompt: str,
     max_retries: int,
+    target_votes: int | None = None,
+    rng_seed: int = 0,
     log: logging.Logger | None = None,
 ) -> SeedChunk:
     """Generate + validate one chunk with bounded retries."""
@@ -262,14 +292,32 @@ def generate_validated_chunk(
     for attempt in range(1, max_retries + 2):
         run_prompt = prompt
         if last_error:
-            compact_error = _compact_error_message(last_error)
-            run_prompt = (
-                f"{prompt}\n\nPrevious output failed validation with error:\n"
-                f"{compact_error}\n\nReturn corrected structured output only."
+            run_prompt = _build_retry_prompt(
+                prompt=prompt,
+                last_error=last_error,
             )
         try:
             raw_chunk = stream_seed_chunk(agent, run_prompt)
-            return validate_and_normalize_chunk(raw_chunk)
+            require_votes = not (target_votes is not None and target_votes > 0)
+            normalized = validate_and_normalize_chunk(
+                raw_chunk,
+                require_votes=require_votes,
+            )
+            if target_votes is not None and target_votes > 0:
+                before_votes = len(normalized.votes)
+                normalized = ensure_vote_volume(
+                    normalized,
+                    target_votes=target_votes,
+                    rng_seed=rng_seed + attempt,
+                )
+                added_votes = len(normalized.votes) - before_votes
+                if added_votes > 0 and log is not None:
+                    log.info(
+                        "[generate] chunk vote auto-fill added=%d target=%d",
+                        added_votes,
+                        target_votes,
+                    )
+            return normalized
         except Exception as exc:  # noqa: BLE001
             last_error = str(exc)
             if attempt > max_retries:
@@ -293,6 +341,24 @@ def _compact_error_message(message: str, max_len: int = 280) -> str:
     return f"{compact[:max_len]}..."
 
 
+def _build_retry_prompt(*, prompt: str, last_error: str) -> str:
+    compact_error = _compact_error_message(last_error)
+    recovery = ""
+    lowered = last_error.lower()
+    if "failed_generation" in lowered or "tool_use_failed" in lowered:
+        recovery = (
+            "\n\nStrict recovery mode:\n"
+            "- Keep output compact.\n"
+            "- Keep descriptions short (<= 90 chars).\n"
+            "- Keep 2 options per poll.\n"
+            "- Return votes as []."
+        )
+    return (
+        f"{prompt}\n\nPrevious output failed validation with error:\n"
+        f"{compact_error}\n\nReturn corrected structured output only.{recovery}"
+    )
+
+
 def _normalize_datetime(value: datetime | str | None, fallback: datetime) -> datetime:
     if value is None:
         dt = fallback
@@ -309,14 +375,18 @@ def _normalize_datetime(value: datetime | str | None, fallback: datetime) -> dat
     return dt
 
 
-def validate_and_normalize_chunk(chunk: SeedChunk) -> SeedChunk:
+def validate_and_normalize_chunk(
+    chunk: SeedChunk,
+    *,
+    require_votes: bool = True,
+) -> SeedChunk:
     """Run schema-level and relational validations; dedupe conflicting votes."""
     now = datetime.utcnow()
     if not chunk.users:
         raise ValueError("Chunk must contain at least one user")
     if not chunk.polls:
         raise ValueError("Chunk must contain at least one poll")
-    if not chunk.votes:
+    if require_votes and not chunk.votes:
         raise ValueError("Chunk must contain at least one vote")
 
     user_ids: set[str] = set()
@@ -450,13 +520,164 @@ def validate_and_normalize_chunk(chunk: SeedChunk) -> SeedChunk:
             )
         )
 
-    if not normalized_votes:
+    if require_votes and not normalized_votes:
         raise ValueError("No valid votes remain after validation")
 
     return SeedChunk(
         users=normalized_users,
         polls=normalized_polls,
         votes=normalized_votes,
+    )
+
+
+def _build_vote_timestamp(
+    poll: SeedPoll, rng: random.Random, fallback: datetime
+) -> datetime:
+    """Generate a realistic vote timestamp within poll lifetime bounds."""
+    poll_created = poll.created_at or fallback
+    window_start = poll_created + timedelta(minutes=30)
+    window_end = poll.expires_at or (poll_created + timedelta(days=30))
+    if window_end <= window_start:
+        window_end = window_start + timedelta(hours=1)
+    span_seconds = int((window_end - window_start).total_seconds())
+    return window_start + timedelta(seconds=rng.randint(0, max(span_seconds, 1)))
+
+
+def ensure_vote_volume(
+    chunk: SeedChunk,
+    *,
+    target_votes: int,
+    rng_seed: int = 0,
+) -> SeedChunk:
+    """Top up votes deterministically to target size using valid poll/user pairs."""
+    if target_votes <= 0:
+        return chunk
+    if len(chunk.votes) >= target_votes:
+        return chunk
+
+    rng = random.Random(rng_seed)
+    now = datetime.utcnow()
+    users = [user.ref for user in chunk.users]
+    polls_by_ref = {poll.ref: poll for poll in chunk.polls}
+    existing_pairs = {(vote.poll_ref, vote.user_ref) for vote in chunk.votes}
+
+    candidates: list[tuple[str, str]] = []
+    for poll_ref in sorted(polls_by_ref.keys()):
+        for user_ref in users:
+            pair = (poll_ref, user_ref)
+            if pair not in existing_pairs:
+                candidates.append(pair)
+
+    rng.shuffle(candidates)
+    missing = min(target_votes - len(chunk.votes), len(candidates))
+    if missing <= 0:
+        return chunk
+
+    expanded_votes = list(chunk.votes)
+    for poll_ref, user_ref in candidates[:missing]:
+        poll = polls_by_ref[poll_ref]
+        if not poll.options:
+            continue
+        option = rng.choice(poll.options)
+        created_at = _build_vote_timestamp(poll, rng, now)
+        expanded_votes.append(
+            SeedVote(
+                user_ref=user_ref,
+                poll_ref=poll_ref,
+                option_ref=option.ref,
+                created_at=created_at,
+            )
+        )
+
+    return SeedChunk(users=chunk.users, polls=chunk.polls, votes=expanded_votes)
+
+
+def generate_local_seed_chunk(
+    *,
+    profile: SeedProfile,
+    chunk_index: int,
+    rng_seed: int,
+    topic_hint: str,
+) -> SeedChunk:
+    """
+    Build a deterministic, schema-valid chunk without calling an LLM.
+
+    This is used as a resilience fallback when provider calls repeatedly fail
+    (e.g., sustained rate limits).
+    """
+    rng = random.Random(rng_seed)
+    now = datetime.utcnow()
+    topic = " ".join(part for part in topic_hint.split() if part) or "team feedback"
+
+    users: list[SeedUser] = []
+    for idx in range(1, profile.users_per_chunk + 1):
+        first = _FALLBACK_FIRST_NAMES[(idx + chunk_index) % len(_FALLBACK_FIRST_NAMES)]
+        last = _FALLBACK_LAST_NAMES[(idx * 2 + chunk_index) % len(_FALLBACK_LAST_NAMES)]
+        ref = f"c{chunk_index}_u_{idx:02d}"
+        users.append(
+            SeedUser(
+                ref=ref,
+                full_name=f"{first} {last}",
+                email=f"{first.lower()}.{last.lower()}.{chunk_index:02d}{idx:02d}@quickpoll.local",
+                role="ADMIN" if idx == 1 else "USER",
+                created_at=now - timedelta(days=rng.randint(3, 120)),
+            )
+        )
+
+    polls: list[SeedPoll] = []
+    option_counter = 1
+    option_labels = (
+        "Strongly agree",
+        "Agree",
+        "Neutral",
+        "Disagree",
+        "Strongly disagree",
+    )
+    max_options = min(5, max(2, len(option_labels)))
+    for idx in range(1, profile.polls_per_chunk + 1):
+        poll_ref = f"c{chunk_index}_p_{idx:02d}"
+        creator_ref = users[(idx - 1) % len(users)].ref
+        created_at = now - timedelta(days=rng.randint(1, 45), hours=rng.randint(0, 18))
+        expires_at = created_at + timedelta(days=rng.randint(7, 30))
+        n_options = 2 + (idx % (max_options - 1))
+        options: list[SeedPollOption] = []
+        for option_pos in range(1, n_options + 1):
+            option_ref = f"c{chunk_index}_o_{option_counter:02d}"
+            option_counter += 1
+            label = option_labels[(option_pos + idx) % len(option_labels)]
+            options.append(
+                SeedPollOption(
+                    ref=option_ref,
+                    option_text=f"{label} ({idx}.{option_pos})",
+                )
+            )
+
+        polls.append(
+            SeedPoll(
+                ref=poll_ref,
+                title=f"{topic.title()} Pulse #{idx}",
+                question=f"What should be prioritized for {topic} in cycle {idx}?",
+                description=(
+                    f"Input collection for {topic}; use this poll to guide "
+                    f"the next team decision."
+                ),
+                active=True,
+                multi_select=bool(idx % 3 == 0),
+                creator_ref=creator_ref,
+                created_at=created_at,
+                expires_at=expires_at,
+                options=options,
+            )
+        )
+
+    normalized = validate_and_normalize_chunk(
+        SeedChunk(users=users, polls=polls, votes=[]),
+        require_votes=False,
+    )
+    return ensure_vote_volume(
+        normalized,
+        target_votes=profile.votes_per_chunk,
+        rng_seed=rng_seed + 10_003,
     )
 
 

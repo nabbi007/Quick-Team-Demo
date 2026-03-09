@@ -1,135 +1,92 @@
-# DevOps PubSub Infrastructure Guide (AI-Agent Ready)
+# DevOps PubSub Infrastructure Guide (Human + AI Agent Ready)
 
-This is the infrastructure runbook for setting up Kafka + ZooKeeper based PubSub so:
+This guide defines the shared infrastructure needed so backend publishing and data-pipeline consuming work reliably.
 
-- Backend publishes events reliably
-- Data-engineering consumes and processes events reliably
-- Both services share the same Postgres source of truth
+## 1. Final Architecture
 
-Use this as both a human guide and a direct handoff to an AI agent.
+For shared environments, use:
 
-## 1. Target Outcome
+- `frontend` (Docker)
+- `backend` (Docker)
+- `data-pipeline` (Docker; data-engineering service name)
+- `kafka` (Docker)
+- `zookeeper` (Docker)
+- **AWS Managed Postgres (RDS)** (external, not in Docker)
 
-At the end of setup, all of these must be true:
+Important:
 
-1. Kafka and ZooKeeper are running and healthy.
-2. Backend can publish `vote_events` and `poll_events`.
-3. Data-engineering can consume those topics.
-4. Both backend and data-engineering point to the same Postgres instance.
-5. Pipeline logs show processed `VOTE_CAST`, `POLL_CREATED`, `POLL_CLOSED`.
+- The Postgres service inside `data-engineering/docker-compose.kafka-dev.yml` is **dev only**.
+- Do not use local Postgres for shared dev/staging/prod environments.
 
-## 2. Architecture (PubSub + Shared DB)
+## 2. Data Flow (PubSub + Shared OLTP)
 
 ```text
-                        +-------------------+
-                        |   Frontend (UI)   |
-                        +---------+---------+
-                                  |
-                                  v
-                        +-------------------+
-                        | Backend (Spring)  |
-                        | OLTP owner        |
-                        +----+---------+----+
-                             |         |
-        writes OLTP rows ----+         +---- publishes events ----+
-                             |                                  |
-                             v                                  v
-                    +----------------+                 +------------------+
-                    | Postgres       |                 | Kafka Broker     |
-                    | (shared)       |                 | + ZooKeeper      |
-                    +-------+--------+                 +--------+---------+
-                            ^                                   |
-                            |                                   |
-            reads OLTP + writes analytics                       |
-                            |                          consumes events
-                            |                                   v
-                    +-------+-------------------------------+----------+
-                    | Data-engineering pipeline                        |
-                    | backfill + streaming + analytics tables          |
-                    +--------------------------------------------------+
+Frontend -> Backend API
+
+Backend -> Postgres (OLTP writes)
+Backend -> Kafka topics (publish events)
+
+Data-pipeline -> Kafka topics (consume events)
+Data-pipeline -> Postgres (read OLTP, write analytics tables)
 ```
 
-## 3. Event Topics and Contracts
-
-The required topics are:
+Required Kafka topics:
 
 - `vote_events`
 - `poll_events`
 
-Exact payload contract is defined in:
-
-- `data-engineering/docs/BACKEND_KAFKA_GUIDE.md`
-
-Current accepted event types by pipeline:
+Required event types consumed:
 
 - `VOTE_CAST`
 - `POLL_CREATED`
 - `POLL_CLOSED`
 
-Any other `event_type` is skipped.
+Event payload contract source:
 
-## 4. Current Repo Reality (Important)
+- `data-engineering/docs/BACKEND_KAFKA_GUIDE.md`
 
-Current files in repo:
+## 3. Repo Reality and Boundaries
 
-- Root `docker-compose.yml` does not include Kafka/ZooKeeper or data-engineering service.
-- `data-engineering/docker-compose.kafka-dev.yml` already provides:
-  - Postgres
-  - ZooKeeper
-  - Kafka with multi-listener setup
+Current repo state:
 
-So DevOps has two valid patterns:
+- Root `docker-compose.yml` currently does not include Kafka/ZooKeeper/data-pipeline.
+- `data-engineering/docker-compose.kafka-dev.yml` contains Kafka/ZooKeeper and a local Postgres for local-only testing.
 
-1. Keep infra compose separate (`data-engineering/docker-compose.kafka-dev.yml`) and run backend independently.
-2. Create a unified compose that includes backend + data-engineering + Kafka + ZooKeeper + Postgres.
+Boundary to enforce:
 
-For team consistency, prefer option 2 for shared environments.
+- Local Postgres in data-engineering compose is for personal local dev only.
+- Shared infrastructure must point both backend and data-pipeline to AWS RDS.
+
+## 4. Kafka and ZooKeeper Deployment Mode
+
+Default mode to implement now:
+
+- Keep **Kafka + ZooKeeper in Docker**.
+
+Future option to document for later:
+
+- AWS MSK (managed Kafka), replacing local Kafka/ZooKeeper containers.
 
 ## 5. Kafka Listener Matrix
 
-Kafka is configured with multiple listeners in `data-engineering/docker-compose.kafka-dev.yml`.
+Use the right bootstrap server based on where the client runs:
 
-Use the right bootstrap server per client location:
+- Host process -> `localhost:9092`
+- Container in same compose network -> `kafka:29092`
+- Container outside compose network -> `host.docker.internal:9094`
+- Tunnel client -> `<tunnel-host>:9093`
 
-- Process running on host machine:
-  - `localhost:9092`
-- Containerized backend outside Kafka compose network:
-  - `host.docker.internal:9094`
-- Container in same compose network as Kafka service:
-  - `kafka:29092`
-- Tunnel clients:
-  - `<tunnel-host>:9093`
+If broker connection fails, check this matrix first.
 
-If clients fail with broker connection errors, this matrix is the first thing to check.
+## 6. Unified Compose Blueprint (RDS-Based)
 
-## 6. Compose Blueprint (Unified Stack)
-
-Create a compose file (recommended name: `docker-compose.pubsub.yml`) at repo root.
-
-This blueprint is intentionally explicit and safe for AI-assisted setup:
+Create a unified compose file at repo root (name is DevOps choice).  
+In commands below, replace `<compose-file>.yml` with your chosen filename.
 
 ```yaml
 version: "3.8"
 
 services:
-  postgres:
-    image: postgres:17
-    container_name: qp-postgres
-    environment:
-      POSTGRES_DB: quickpoll
-      POSTGRES_USER: quickpoll
-      POSTGRES_PASSWORD: quickpoll123
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./data-engineering/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quickpoll -d quickpoll"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: qp-zookeeper
@@ -153,7 +110,7 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_TUNNEL:PLAINTEXT,PLAINTEXT_DOCKER:PLAINTEXT
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT_TUNNEL://0.0.0.0:9093,PLAINTEXT_DOCKER://0.0.0.0:9094
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092,PLAINTEXT_TUNNEL://port-9093.henryantwi.me:9093,PLAINTEXT_DOCKER://host.docker.internal:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092,PLAINTEXT_TUNNEL://<tunnel-host>:9093,PLAINTEXT_DOCKER://host.docker.internal:9094
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
@@ -170,29 +127,27 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/quickpoll
-      DB_USERNAME: quickpoll
-      DB_PASSWORD: quickpoll123
+      DB_URL: jdbc:postgresql://<rds-endpoint>:5432/quickpoll
+      DB_USERNAME: <rds-username>
+      DB_PASSWORD: <rds-password>
       JWT_SECRET: ${JWT_SECRET:-replace-me}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TOPIC_VOTE_EVENTS: vote_events
       KAFKA_TOPIC_POLL_EVENTS: poll_events
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
-      postgres:
-        condition: service_healthy
       kafka:
         condition: service_healthy
 
-  data-engineering:
+  data-pipeline:
     build: ./data-engineering
-    container_name: quickpoll-analytics
+    container_name: quickpoll-data-pipeline
     environment:
-      DB_HOST: postgres
+      DB_HOST: <rds-endpoint>
       DB_PORT: 5432
       DB_NAME: quickpoll
-      DB_USER: quickpoll
-      DB_PASSWORD: quickpoll123
+      DB_USER: <rds-username>
+      DB_PASSWORD: <rds-password>
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TOPIC_VOTE_EVENTS: vote_events
       KAFKA_TOPIC_POLL_EVENTS: poll_events
@@ -206,8 +161,6 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
       R2_DLQ_BUCKET: ${R2_DLQ_BUCKET:-quickpoll-dlq}
     depends_on:
-      postgres:
-        condition: service_healthy
       kafka:
         condition: service_healthy
     restart: on-failure
@@ -219,9 +172,6 @@ services:
       - "4200:80"
     depends_on:
       - backend
-
-volumes:
-  pgdata:
 ```
 
 ## 7. Startup and Teardown Commands
@@ -229,146 +179,153 @@ volumes:
 From repo root:
 
 ```bash
-docker compose -f docker-compose.pubsub.yml up -d --build
-docker compose -f docker-compose.pubsub.yml ps
+docker compose -f <compose-file>.yml up -d --build
+docker compose -f <compose-file>.yml ps
 ```
 
 Teardown:
 
 ```bash
-docker compose -f docker-compose.pubsub.yml down
+docker compose -f <compose-file>.yml down
 ```
 
-Teardown with volume reset:
+## 8. AWS RDS Requirements
+
+RDS prerequisites:
+
+1. RDS Postgres instance reachable from Docker host/EC2.
+2. Security Group allows inbound `5432` from application host SG.
+3. Database `quickpoll` exists (or backend creates schema via JPA update).
+4. Credentials are available to both backend and data-pipeline.
+
+Recommended checks:
 
 ```bash
-docker compose -f docker-compose.pubsub.yml down -v
+psql "host=<rds-endpoint> port=5432 dbname=quickpoll user=<rds-username> sslmode=prefer"
 ```
 
-## 8. Health and Smoke Checks
+If org policy requires TLS strictly, switch to `sslmode=require`.
 
-### 8.1 Infrastructure checks
+## 9. Health and Smoke Verification
+
+Infrastructure checks:
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-docker exec qp-postgres pg_isready -U quickpoll -d quickpoll
 docker exec qp-kafka kafka-topics --bootstrap-server localhost:9092 --list
 ```
 
-Expected topics at minimum (after first publish):
-
-- `vote_events`
-- `poll_events`
-
-### 8.2 Producer-side check (Backend -> Kafka)
+Topic checks:
 
 ```bash
-docker exec qp-kafka kafka-console-consumer \
-  --bootstrap-server localhost:9092 \
-  --topic poll_events \
-  --from-beginning
+docker exec qp-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic poll_events --from-beginning
+docker exec qp-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic vote_events --from-beginning
 ```
 
-Trigger poll create/close from backend API and confirm events appear.
-
-### 8.3 Consumer-side check (Kafka -> Data Engineering)
+Pipeline checks:
 
 ```bash
-docker logs quickpoll-analytics --tail 200
+docker logs quickpoll-data-pipeline --tail 200
 ```
 
-Expected lines include:
+Expected pipeline logs include:
 
 - `Starting Kafka consumer loop...`
 - `Processed VOTE_CAST: ...`
 - `Processed POLL_CREATED: ...`
 - `Processed POLL_CLOSED: ...`
 
-## 9. Required Env Map by Service
+## 10. Required Environment Mapping
 
-### 9.1 Backend env (containerized)
+Backend (containerized):
 
-- `DB_URL=jdbc:postgresql://postgres:5432/quickpoll`
-- `DB_USERNAME=quickpoll`
-- `DB_PASSWORD=quickpoll123`
+- `DB_URL=jdbc:postgresql://<rds-endpoint>:5432/quickpoll`
+- `DB_USERNAME=<rds-username>`
+- `DB_PASSWORD=<rds-password>`
 - `JWT_SECRET=<secret>`
 - `KAFKA_BOOTSTRAP_SERVERS=kafka:29092`
 - `KAFKA_TOPIC_VOTE_EVENTS=vote_events`
 - `KAFKA_TOPIC_POLL_EVENTS=poll_events`
 
-### 9.2 Data-engineering env (containerized)
+Data-pipeline (containerized):
 
-- `DB_HOST=postgres`
+- `DB_HOST=<rds-endpoint>`
 - `DB_PORT=5432`
 - `DB_NAME=quickpoll`
-- `DB_USER=quickpoll`
-- `DB_PASSWORD=quickpoll123`
+- `DB_USER=<rds-username>`
+- `DB_PASSWORD=<rds-password>`
 - `KAFKA_BOOTSTRAP_SERVERS=kafka:29092`
 - `KAFKA_TOPIC_VOTE_EVENTS=vote_events`
 - `KAFKA_TOPIC_POLL_EVENTS=poll_events`
 - `KAFKA_GROUP_ID=quickpoll-analytics`
 
-## 10. Common Failure Patterns
+## 11. Common Failure Patterns
 
-1. Backend cannot connect to Kafka:
-   - Usually wrong listener value (`localhost` inside container).
-   - Fix to `kafka:29092`.
+1. Kafka connection failure in containers:
+   - Cause: using `localhost:9092` inside container.
+   - Fix: use `kafka:29092`.
 
-2. Data-engineering restarts repeatedly:
-   - Kafka/Postgres not healthy when pipeline starts.
-   - Ensure `depends_on: condition: service_healthy` and keep health checks.
+2. Backend publishes but pipeline does not update:
+   - Cause: wrong topic names or event_type mismatch.
+   - Fix: verify `vote_events`/`poll_events` payload contract.
 
-3. No real-time analytics updates:
-   - Backend not publishing events or wrong topic name.
-   - Verify message flow on Kafka console consumer.
+3. Both apps fail DB connection:
+   - Cause: RDS SG/network/credentials.
+   - Fix: validate SG, endpoint, user/password, TLS mode.
 
-4. Schema-related runtime errors:
-   - Backend DB model not aligned with `data-engineering/schema.sql`.
-   - Align schema and event payload contracts (see backend guide).
+4. Pipeline starts before Kafka ready:
+   - Cause: weak healthcheck or missing depends_on condition.
+   - Fix: keep Kafka healthcheck + `condition: service_healthy`.
 
-## 11. AI-Agent Task Prompt for DevOps
+## 12. Optional Future Path: AWS MSK Proposal
 
-Copy/paste this directly into an AI coding agent:
+If moving to AWS MSK later:
+
+1. Remove `kafka` and `zookeeper` services from compose.
+2. Set backend/data-pipeline bootstrap servers to MSK brokers.
+3. Update SG/network rules for MSK broker ports.
+4. Keep same topic names and payload contracts.
+5. Re-run smoke checks using MSK bootstrap endpoints.
+
+This is optional. Current baseline remains Docker Kafka + ZooKeeper.
+
+## 13. AI Agent Prompt for DevOps
+
+Copy/paste this into an AI coding agent:
 
 ```text
-Set up a unified Docker Compose PubSub infrastructure for QuickPoll so backend and data-engineering both work with shared Postgres and Kafka/ZooKeeper.
+Implement a unified Docker Compose PubSub setup for QuickPoll using:
+- Docker services: zookeeper, kafka, backend, data-pipeline, frontend
+- External AWS RDS Postgres (no postgres service in compose)
 
-Repository context:
-- Existing infra baseline: data-engineering/docker-compose.kafka-dev.yml
-- Backend compose exists but lacks Kafka/ZooKeeper integration.
-- Root compose exists but currently has no Kafka/ZooKeeper and no data-engineering service.
-
-Tasks:
-1) Create docker-compose.pubsub.yml at repo root using the blueprint in data-engineering/docs/DEVOPS_INFRA_GUIDE.md.
-2) Include services: postgres, zookeeper, kafka, backend, data-engineering, frontend.
-3) Preserve Kafka multi-listener strategy:
-   - kafka:29092 for intra-compose containers
-   - localhost:9092 for host clients
-   - host.docker.internal:9094 for external containers
-4) Add health checks for postgres and kafka and wire backend/data-engineering depends_on with service_healthy conditions.
-5) Wire backend env for DB and Kafka topics/bootstrap.
-6) Wire data-engineering env for DB, Kafka topics/group, and pipeline settings.
-7) Do not remove existing compose files; add this as a new unified compose.
-8) Provide verification commands:
-   - list running containers
-   - check kafka topics
-   - consume poll_events and vote_events
-   - inspect data-engineering logs for processed events
-9) Document any assumptions in a short README section.
+Constraints:
+1) Use service name "data-pipeline" for data-engineering.
+2) Do not assume a compose filename. Use a placeholder in docs/commands.
+3) Keep Kafka+ZooKeeper in Docker as default runtime.
+4) Preserve Kafka multi-listener strategy (29092 internal, 9092 host, 9094 external containers, optional 9093 tunnel).
+5) Wire backend and data-pipeline to the same RDS endpoint.
+6) Add/keep Kafka health checks and service_healthy dependencies.
+7) Ensure topic names are vote_events and poll_events.
+8) Include verification commands for:
+   - container health
+   - kafka topics
+   - event consumption from both topics
+   - data-pipeline processed-event logs
+9) Add a short optional section describing how to migrate to AWS MSK later.
 
 Definition of done:
-- docker compose -f docker-compose.pubsub.yml up -d --build succeeds
-- backend can publish poll_events and vote_events
-- data-engineering consumes events and logs processing
-- shared postgres is healthy and reachable by both services
+- Stack starts cleanly
+- Backend publishes poll_events and vote_events
+- Data-pipeline consumes and processes events
+- Both backend and data-pipeline connect to the same AWS RDS database
 ```
 
-## 12. Definition of Done (DevOps)
+## 14. Definition of Done (DevOps)
 
-Infrastructure is complete only when:
+Infra setup is complete only when:
 
-1. `docker compose -f docker-compose.pubsub.yml up -d --build` succeeds.
-2. Postgres, ZooKeeper, Kafka, backend, data-engineering, frontend are healthy/running.
-3. Backend publishes events to `vote_events` and `poll_events`.
-4. Data-engineering consumes and processes those events.
-5. Listener mismatch errors are absent from logs.
+1. Kafka and ZooKeeper are healthy.
+2. Backend and data-pipeline are running.
+3. Backend publishes to `vote_events` and `poll_events`.
+4. Data-pipeline processes those events in logs.
+5. Both services connect successfully to AWS RDS.
