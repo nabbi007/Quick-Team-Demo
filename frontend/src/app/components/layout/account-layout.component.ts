@@ -1,16 +1,16 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ContentHeaderComponent } from '@/components/ui/content-header.component';
-import { SidebarComponent } from '@/components/ui/sidebar.component';
+import { SecondaryNavbarComponent } from '../ui/navbar.component';
 
 @Component({
   selector: 'app-account',
   standalone: true,
-  imports: [ContentHeaderComponent, SidebarComponent, RouterOutlet],
+  imports: [ContentHeaderComponent, SecondaryNavbarComponent, RouterOutlet],
   template: `
     <app-content-header title="Account" />
-    <div class="p-5 flex gap-5">
-      <app-sidebar [navLinks]="navLinks" />
+    <div class="p-5 flex flex-col maxview-container gap-5">
+      <app-secondary-navbar [navLinks]="navLinks" />
       <router-outlet />
     </div>
   `,

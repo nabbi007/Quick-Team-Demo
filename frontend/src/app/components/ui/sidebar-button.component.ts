@@ -9,7 +9,7 @@ import { ButtonComponent } from './button.component';
   template: `
     <button
       app-button
-      size="md"
+      size="sm"
       routerLinkActive
       #rla="routerLinkActive"
       [routerLink]="path()"

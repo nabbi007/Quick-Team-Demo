@@ -5,9 +5,11 @@ import { Component, input } from '@angular/core';
   standalone: true,
   imports: [],
   template: `
-    <div class="relative p-5 py-7 mb-6 border-b">
-      <h1 class="text-2xl font-medium">{{ title() }}</h1>
-      <ng-content />
+    <div class="border-b">
+      <div class="p-5 py-7.5 maxview-container">
+        <h1 class="text-2xl font-medium">{{ title() }}</h1>
+        <ng-content />
+      </div>
     </div>
   `,
 })

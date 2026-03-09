@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '@/services/auth.service';
+import { User } from '@/models';
 import { ButtonComponent } from '@/components/ui/button.component';
 import { InputComponent } from '@/components/ui/input.component';
 
@@ -10,28 +11,8 @@ import { InputComponent } from '@/components/ui/input.component';
   standalone: true,
   imports: [ButtonComponent, InputComponent, FormsModule],
   template: `
-    <div class="flex flex-col gap-3">
-
-      <div class="border bg-surface flex flex-col gap-2 px-4 py-6 rounded-lg">
-        <p class="text-sm text-muted-foreground font-medium">Name</p>
-        @if (isEditing()) {
-          <input app-input [(ngModel)]="editName" />
-        } @else {
-          <p class="text-sm">{{ user()?.name }}</p>
-        }
-      </div>
-
-      <div class="border bg-surface flex flex-col gap-2 px-4 py-6 rounded-lg">
-        <p class="text-sm text-muted-foreground font-medium">Email</p>
-        <p class="text-sm">{{ user()?.email }}</p>
-      </div>
-
-      <div class="border bg-surface flex flex-col gap-2 px-4 py-6 rounded-lg">
-        <p class="text-sm text-muted-foreground font-medium">Role</p>
-        <p class="text-sm">{{ user()?.role }}</p>
-      </div>
-
-      <div class="flex gap-2">
+    <div class="flex max-lg:flex-col gap-5">
+      <div class="flex md:min-w-75 gap-2">
         @if (isEditing()) {
           <button app-button variant="primary" (click)="saveEdit()">Save</button>
           <button app-button variant="outline" (click)="cancelEdit()">Cancel</button>
@@ -41,6 +22,26 @@ import { InputComponent } from '@/components/ui/input.component';
         <button app-button variant="destructive" (click)="logout()">Logout</button>
       </div>
 
+      <div class="flex flex-col gap-3 w-full">
+        <div class="border bg-surface flex flex-col gap-2 px-4 py-6 rounded-lg">
+          <p class="text-sm text-muted-foreground font-medium">Name</p>
+          @if (isEditing()) {
+            <input app-input [(ngModel)]="editName" />
+          } @else {
+            <p class="text-sm">{{ user()?.fullName }}</p>
+          }
+        </div>
+
+        <div class="border bg-surface flex flex-col gap-2 px-4 py-6 rounded-lg">
+          <p class="text-sm text-muted-foreground font-medium">Email</p>
+          <p class="text-sm">{{ user()?.email }}</p>
+        </div>
+
+        <div class="border bg-surface flex flex-col gap-2 px-4 py-6 rounded-lg">
+          <p class="text-sm text-muted-foreground font-medium">Role</p>
+          <p class="text-sm">{{ user()?.role }}</p>
+        </div>
+      </div>
     </div>
   `,
 })
@@ -48,7 +49,7 @@ export class ProfileComponent implements OnInit {
   private authService = inject(AuthService);
   private router = inject(Router);
 
-  protected user = signal<any>(null);
+  protected user = signal<User | null>(null);
   protected isEditing = signal(false);
   protected editName = '';
 
@@ -59,7 +60,7 @@ export class ProfileComponent implements OnInit {
   }
 
   startEdit() {
-    this.editName = this.user()?.name ?? '';
+    this.editName = this.user()?.fullName ?? '';
     this.isEditing.set(true);
   }
 
