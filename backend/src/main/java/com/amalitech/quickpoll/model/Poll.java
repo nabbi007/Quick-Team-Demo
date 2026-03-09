@@ -20,7 +20,7 @@ public class Poll {
     @Column(nullable = false)
     private String question;
     
-    @Column(length = 1000)
+    @Column(length = 1000, nullable = true)
     private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
