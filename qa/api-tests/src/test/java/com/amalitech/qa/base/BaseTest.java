@@ -43,7 +43,7 @@ public abstract class BaseTest {
         
         // Initialize configuration manager
         config = ConfigurationManager.getInstance();
-        logger.info("Configuration loaded for environment: {}", config.getEnvironment());
+        logger.info("Configuration loaded successfully");
         
         // Configure Rest Assured defaults
         RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();

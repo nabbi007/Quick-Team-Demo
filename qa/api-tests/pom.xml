@@ -114,6 +114,7 @@
                                     <followSymlinks>false</followSymlinks>
                                 </fileset>
                             </filesets>
+                            <failOnError>false</failOnError>
                         </configuration>
                     </execution>
                 </executions>

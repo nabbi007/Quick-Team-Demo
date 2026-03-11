@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 /**
  * Security tests for authorization and access control.
  * Tests role-based access control and authentication requirements.
@@ -138,7 +140,7 @@ public class AuthorizationTests extends BaseTest {
         // or 201 if the test user happens to have admin permissions
         // Note: 403 means authenticated but not authorized (insufficient permissions)
         int statusCode = response.getStatusCode();
-        org.junit.jupiter.api.Assertions.assertTrue(
+        assertTrue(
             statusCode == 403 || statusCode == 201,
             "Expected 403 (forbidden - insufficient permissions) or 201 (if user has admin role), but got " + statusCode
         );

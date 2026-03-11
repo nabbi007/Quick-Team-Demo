@@ -39,15 +39,31 @@ public class TestDataManager {
     
     /**
      * Creates a test poll with default values for quick test data setup.
+     * Includes all required fields per API specification:
+     * - title (required)
+     * - question (required)
+     * - description (optional)
+     * - options (required)
+     * - maxSelections (required)
+     * - anonymous (required)
+     * - departmentIds (required)
+     * - expiresAt (required)
      * 
      * @return the created poll ID
      */
     public String createTestPollWithDefaults() {
         Map<String, Object> defaultPoll = new HashMap<>();
-        defaultPoll.put("question", "Test Poll: " + UUID.randomUUID().toString());
+        defaultPoll.put("title", "Test Poll " + System.currentTimeMillis());
+        defaultPoll.put("question", "Test Question: " + UUID.randomUUID().toString());
         defaultPoll.put("description", "Test Description");
         defaultPoll.put("options", Arrays.asList("Option 1", "Option 2", "Option 3"));
-        defaultPoll.put("multipleChoice", false);
+        defaultPoll.put("maxSelections", 1);
+        defaultPoll.put("anonymous", false);
+        defaultPoll.put("departmentIds", Arrays.asList(1)); // Default department ID
+        
+        // Set expiration to 7 days from now
+        java.time.LocalDateTime expiresAt = java.time.LocalDateTime.now().plusDays(7);
+        defaultPoll.put("expiresAt", expiresAt.toString());
         
         logger.info("Creating test poll with default data");
         
@@ -55,14 +71,26 @@ public class TestDataManager {
         
         if (response.getStatusCode() == 201 || response.getStatusCode() == 200) {
             String pollId = response.jsonPath().getString("id");
-            trackResource(RESOURCE_TYPE_POLL, pollId);
-            logger.info("Test poll created with ID: {}", pollId);
-            return pollId;
-        } else {
-            logger.error("Failed to create test poll. Status: {}, Body: {}",
-                    response.getStatusCode(), response.getBody().asString());
-            throw new RuntimeException("Failed to create test poll");
+            if (pollId != null) {
+                trackResource(RESOURCE_TYPE_POLL, pollId);
+                logger.info("Test poll created with ID: {}", pollId);
+                return pollId;
+            } else {
+                // Try getting id as integer
+                Integer pollIdInt = response.jsonPath().getInt("id");
+                if (pollIdInt != null) {
+                    String pollIdStr = String.valueOf(pollIdInt);
+                    trackResource(RESOURCE_TYPE_POLL, pollIdStr);
+                    logger.info("Test poll created with ID: {}", pollIdStr);
+                    return pollIdStr;
+                }
+            }
         }
+        
+        logger.error("Failed to create test poll. Status: {}, Body: {}",
+                response.getStatusCode(), response.getBody().asString());
+        throw new RuntimeException("Failed to create test poll. Status: " + response.getStatusCode() + 
+                ", Response: " + response.getBody().asString());
     }
     
     /**

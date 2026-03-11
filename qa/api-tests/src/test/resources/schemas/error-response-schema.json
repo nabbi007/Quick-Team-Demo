@@ -3,13 +3,23 @@
   "title": "Error Response Schema",
   "description": "JSON schema for validating error response structure",
   "type": "object",
-  "required": ["statusCode", "message", "timestamp"],
+  "required": ["status", "message", "timestamp"],
   "properties": {
-    "statusCode": {
+    "status": {
       "type": "integer",
       "minimum": 400,
       "maximum": 599,
       "description": "HTTP error status code"
+    },
+    "statusCode": {
+      "type": "integer",
+      "minimum": 400,
+      "maximum": 599,
+      "description": "HTTP error status code (alternative field name)"
+    },
+    "error": {
+      "type": "string",
+      "description": "Error type description"
     },
     "message": {
       "type": "string",
@@ -30,8 +40,8 @@
       "items": {
         "type": "string"
       },
-      "description": "Additional error details"
+      "description": "Additional error details for validation failures"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": true
 }

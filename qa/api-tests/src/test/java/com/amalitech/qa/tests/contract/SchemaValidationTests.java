@@ -16,7 +16,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -47,19 +49,22 @@ public class SchemaValidationTests extends BaseTest {
     @Severity(SeverityLevel.CRITICAL)
     @Story("Schema Validation")
     public void testPollResponseSchema() {
-        // Arrange
-        CreatePollRequest pollRequest = new CreatePollRequest(
-            "Schema Test Poll",
-            "Testing schema validation",
-            Arrays.asList("Option A", "Option B", "Option C"),
-            false
-        );
+        // Arrange - Use proper poll creation request with all required fields
+        Map<String, Object> pollRequest = new HashMap<>();
+        pollRequest.put("title", "Schema Test Poll");
+        pollRequest.put("question", "Testing schema validation");
+        pollRequest.put("description", "Testing schema validation");
+        pollRequest.put("options", Arrays.asList("Option A", "Option B"));
+        pollRequest.put("maxSelections", 1);
+        pollRequest.put("anonymous", false);
+        pollRequest.put("departmentIds", Arrays.asList(1));
+        pollRequest.put("expiresAt", "2026-12-31T23:59:59Z");
         
         // Act
         Response response = apiClient.post("/api/polls", pollRequest);
         
-        // Assert
-        TestHelper.assertStatusCode(response, 201);
+        // Assert - API returns 200 OK per OpenAPI spec
+        TestHelper.assertStatusCode(response, 200);
         response.then().assertThat().body(
             JsonSchemaValidator.matchesJsonSchema(
                 new File("src/test/resources/schemas/poll-response-schema.json")
@@ -115,15 +120,15 @@ public class SchemaValidationTests extends BaseTest {
     
     @Test
     @DisplayName("Poll list response matches paginated schema")
-    @Description("Verify that getting all polls returns a paginated response structure with content array and pagination metadata")
+    @Description("Verify that getting my entitled polls returns a paginated response structure with content array and pagination metadata")
     @Severity(SeverityLevel.CRITICAL)
     @Story("Schema Validation")
     public void testPollListPaginatedResponseSchema() {
-        // Act
-        Response response = apiClient.get("/api/polls");
+        // Act - Use /polls/my-polls endpoint for regular users (GET /polls is admin-only)
+        Response response = apiClient.get("/api/polls/my-polls");
         
         // Assert
-        TestHelper.assertStatusCode(response, 200);
+        TestHelper.assertStatusCode(response, 201);
         
         // Validate paginated response structure (Spring Data Page format)
         SchemaValidator.validatePaginatedResponse(response, 
@@ -157,7 +162,7 @@ public class SchemaValidationTests extends BaseTest {
         
         // Verify it's a simple array (not paginated)
         Object body = response.jsonPath().get("$");
-        assertTrue(body instanceof List, "Department response should be a simple array");
+        assertInstanceOf(List.class, body, "Department response should be a simple array");
         
         // Verify that paginated validation correctly fails for simple arrays
         boolean validationFailed = SchemaValidator.validateSimpleArrayRejection(response);

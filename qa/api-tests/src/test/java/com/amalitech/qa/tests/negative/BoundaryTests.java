@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 /**
  * Negative tests for boundary conditions and edge cases.
  * Tests API behavior with extreme values and boundary inputs.
@@ -76,11 +78,11 @@ public class BoundaryTests extends BaseTest {
         TestHelper.assertStatusCode(response, 400);
         
         String errorMessage = response.jsonPath().getString("message");
-        org.junit.jupiter.api.Assertions.assertNotNull(errorMessage, 
+        assertNotNull(errorMessage,
             "Error response should contain a message");
-        
+
         String lowerMessage = errorMessage.toLowerCase();
-        org.junit.jupiter.api.Assertions.assertTrue(
+        assertTrue(
             lowerMessage.contains("question") || lowerMessage.contains("length") || lowerMessage.contains("long"),
             String.format("Error message should mention question length constraint. Got: %s", errorMessage)
         );
@@ -114,7 +116,7 @@ public class BoundaryTests extends BaseTest {
         TestHelper.assertStatusCode(response, 400);
         
         String errorMessage = response.jsonPath().getString("message");
-        org.junit.jupiter.api.Assertions.assertNotNull(errorMessage, 
+        assertNotNull(errorMessage,
             "Error response should contain a message");
     }
     
@@ -136,11 +138,11 @@ public class BoundaryTests extends BaseTest {
         // Act
         Response response = apiClient.post("/api/auth/register", registerRequest);
         
-        // Assert
+        // Assert - API returns 200 for successful registration
         int statusCode = response.getStatusCode();
-        org.junit.jupiter.api.Assertions.assertTrue(
-            statusCode == 400 || statusCode == 201,
-            "Expected 400 (rejected) or 201 (accepted)"
+        assertTrue(
+            statusCode == 400 || statusCode == 200,
+            "Expected 400 (rejected) or 200 (accepted)"
         );
     }
     
@@ -161,11 +163,11 @@ public class BoundaryTests extends BaseTest {
         // Act
         Response response = apiClient.post("/api/auth/register", registerRequest);
         
-        // Assert
+        // Assert - API returns 200 for successful registration
         int statusCode = response.getStatusCode();
-        org.junit.jupiter.api.Assertions.assertTrue(
-            statusCode == 400 || statusCode == 201,
-            "Expected 400 (rejected) or 201 (accepted)"
+        assertTrue(
+            statusCode == 400 || statusCode == 200,
+            "Expected 400 (rejected) or 200 (accepted)"
         );
     }
     
@@ -189,18 +191,18 @@ public class BoundaryTests extends BaseTest {
         // Act
         Response response = apiClient.post("/api/polls", pollRequest);
         
-        // Assert - Should accept special characters (201) or reject if not allowed (400)
+        // Assert - Should accept special characters (200) or reject if not allowed (400)
         int statusCode = response.getStatusCode();
-        org.junit.jupiter.api.Assertions.assertTrue(
-            statusCode == 400 || statusCode == 201,
-            String.format("Expected 400 (special chars not allowed) or 201 (accepted), got %d. Response: %s",
+        assertTrue(
+            statusCode == 400 || statusCode == 200,
+            String.format("Expected 400 (special chars not allowed) or 200 (accepted), got %d. Response: %s",
                 statusCode, response.getBody().asString())
         );
         
         // If accepted, verify special characters are preserved
-        if (statusCode == 201) {
+        if (statusCode == 200) {
             String question = response.jsonPath().getString("question");
-            org.junit.jupiter.api.Assertions.assertTrue(
+            assertTrue(
                 question.contains("!@#$"),
                 "Special characters should be preserved in response"
             );
@@ -230,18 +232,18 @@ public class BoundaryTests extends BaseTest {
         // Act
         Response response = apiClient.post("/api/polls", pollRequest);
         
-        // Assert - Should accept unicode (201) or reject if not supported (400)
+        // Assert - Should accept unicode (200) or reject if not supported (400)
         int statusCode = response.getStatusCode();
-        org.junit.jupiter.api.Assertions.assertTrue(
-            statusCode == 400 || statusCode == 201,
-            String.format("Expected 400 (unicode not supported) or 201 (accepted), got %d. Response: %s",
+        assertTrue(
+            statusCode == 400 || statusCode == 200,
+            String.format("Expected 400 (unicode not supported) or 200 (accepted), got %d. Response: %s",
                 statusCode, response.getBody().asString())
         );
         
         // If accepted, verify unicode is preserved
-        if (statusCode == 201) {
+        if (statusCode == 200) {
             String question = response.jsonPath().getString("question");
-            org.junit.jupiter.api.Assertions.assertTrue(
+            assertTrue(
                 question.contains("你好") || question.contains("مرحبا") || question.contains("Привет"),
                 "Unicode characters should be preserved in response"
             );
@@ -271,16 +273,16 @@ public class BoundaryTests extends BaseTest {
         // Act
         Response response = apiClient.post("/api/polls", pollRequest);
         
-        // Assert - Should accept null for optional field
+        // Assert - Should accept null for optional field (API returns 200)
         int statusCode = response.getStatusCode();
-        org.junit.jupiter.api.Assertions.assertTrue(
-            statusCode == 200 || statusCode == 201,
-            String.format("Expected 200/201 (null accepted for optional field), got %d. Response: %s",
+        assertTrue(
+            statusCode == 200,
+            String.format("Expected 200 (null accepted for optional field), got %d. Response: %s",
                 statusCode, response.getBody().asString())
         );
         
         // Cleanup
-        if (statusCode == 201 || statusCode == 200) {
+        if (statusCode == 200) {
             String pollId = response.jsonPath().getString("id");
             if (pollId != null) {
                 testDataManager.getCreatedResourceIds().add(pollId);

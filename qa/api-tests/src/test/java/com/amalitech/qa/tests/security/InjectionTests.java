@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 /**
  * Security tests for injection attack prevention.
  * Tests SQL injection, XSS, and other injection vulnerabilities.
@@ -61,7 +63,7 @@ public class InjectionTests extends BaseTest {
             
             // Assert - Should reject or handle safely
             int statusCode = response.getStatusCode();
-            org.junit.jupiter.api.Assertions.assertTrue(
+            assertTrue(
                 statusCode == 400 || statusCode == 401,
                 String.format("SQL injection payload '%s' should be rejected (400) or fail authentication (401), got %d. Response: %s",
                     sqlPayload, statusCode, response.getBody().asString())
@@ -159,7 +161,7 @@ public class InjectionTests extends BaseTest {
         
         // Assert - Should return 404 or 400, not expose file system
         int statusCode = response.getStatusCode();
-        org.junit.jupiter.api.Assertions.assertTrue(
+        assertTrue(
             statusCode == 404 || statusCode == 400,
             "Path traversal should be blocked"
         );

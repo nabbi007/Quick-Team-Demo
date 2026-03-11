@@ -18,16 +18,13 @@ public class ConfigurationManager {
     private static final Logger logger = LoggerFactory.getLogger(ConfigurationManager.class);
     private static volatile ConfigurationManager instance;
     private Properties properties;
-    private String currentEnvironment;
     
     /**
      * Private constructor to prevent direct instantiation.
      */
     private ConfigurationManager() {
         properties = new Properties();
-        // Load default environment (dev) on initialization
-        String env = System.getProperty("env", "dev");
-        loadConfiguration(env);
+        loadConfiguration();
     }
     
     /**
@@ -47,13 +44,12 @@ public class ConfigurationManager {
     }
     
     /**
-     * Loads configuration from environment-specific properties file.
+     * Loads configuration from the application properties file.
      * 
-     * @param environment the environment name (dev, staging, prod)
      * @throws ConfigurationException if configuration file is missing or cannot be loaded
      */
-    public void loadConfiguration(String environment) {
-        String configFile = String.format("config/%s.properties", environment);
+    public void loadConfiguration() {
+        String configFile = "config/application.properties";
         
         try (InputStream input = getClass().getClassLoader().getResourceAsStream(configFile)) {
             if (input == null) {
@@ -63,8 +59,7 @@ public class ConfigurationManager {
             }
             
             properties.load(input);
-            currentEnvironment = environment;
-            logger.info("Successfully loaded configuration for environment: {}", environment);
+            logger.info("Successfully loaded configuration from: {}", configFile);
             
             // Validate required properties
             validateRequiredProperties();
@@ -83,7 +78,7 @@ public class ConfigurationManager {
      */
     private void validateRequiredProperties() {
         String[] requiredProperties = {
-            "base.url",
+            "api.base.url",
             "connection.timeout",
             "response.timeout"
         };
@@ -111,27 +106,25 @@ public class ConfigurationManager {
      * @return the base URL
      */
     public String getBaseUrl() {
-        return properties.getProperty("base.url");
+        return properties.getProperty("api.base.url");
     }
     
     /**
-     * Gets the performance threshold for a specific endpoint type.
+     * Gets the connection timeout in milliseconds.
      * 
-     * @param endpointType the endpoint type (e.g., "get", "post", "list")
-     * @return the performance threshold in milliseconds
+     * @return the connection timeout
      */
-    public int getPerformanceThreshold(String endpointType) {
-        String key = String.format("performance.threshold.%s", endpointType);
-        return Integer.parseInt(properties.getProperty(key, "2000"));
+    public int getConnectionTimeout() {
+        return Integer.parseInt(properties.getProperty("connection.timeout", "10000"));
     }
     
     /**
-     * Gets the current environment name.
+     * Gets the response timeout in milliseconds.
      * 
-     * @return the current environment (dev, staging, prod)
+     * @return the response timeout
      */
-    public String getEnvironment() {
-        return currentEnvironment;
+    public int getResponseTimeout() {
+        return Integer.parseInt(properties.getProperty("response.timeout", "20000"));
     }
     
     /**

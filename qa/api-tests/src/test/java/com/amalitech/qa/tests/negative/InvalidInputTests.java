@@ -18,6 +18,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 /**
  * Negative tests for invalid input handling.
  * Tests API behavior with missing, invalid, or malformed data.
@@ -77,12 +79,12 @@ public class InvalidInputTests extends BaseTest {
         
         // Verify error message is present and helpful
         String errorMessage = response.jsonPath().getString("message");
-        org.junit.jupiter.api.Assertions.assertNotNull(errorMessage, 
+        assertNotNull(errorMessage,
             "Error response should contain a message field");
-        
+
         // Error should mention the email field
         String lowerMessage = errorMessage.toLowerCase();
-        org.junit.jupiter.api.Assertions.assertTrue(
+        assertTrue(
             lowerMessage.contains("email") || lowerMessage.contains("required"),
             String.format("Error message should mention email field. Got: %s", errorMessage)
         );
@@ -153,11 +155,11 @@ public class InvalidInputTests extends BaseTest {
         
         // Verify error message mentions question field
         String errorMessage = response.jsonPath().getString("message");
-        org.junit.jupiter.api.Assertions.assertNotNull(errorMessage, 
+        assertNotNull(errorMessage,
             "Error response should contain a message field");
-        
+
         String lowerMessage = errorMessage.toLowerCase();
-        org.junit.jupiter.api.Assertions.assertTrue(
+        assertTrue(
             lowerMessage.contains("question") || lowerMessage.contains("length") || lowerMessage.contains("required"),
             String.format("Error message should mention question field constraint. Got: %s", errorMessage)
         );
@@ -309,7 +311,7 @@ public class InvalidInputTests extends BaseTest {
         
         // Verify error response structure
         String errorMessage = response.jsonPath().getString("message");
-        org.junit.jupiter.api.Assertions.assertNotNull(errorMessage, 
+        assertNotNull(errorMessage,
             "Error response should contain a message field");
         
         // Check if error mentions the validation failures
@@ -322,13 +324,13 @@ public class InvalidInputTests extends BaseTest {
         // Should mention options issue
         boolean mentionsOptions = lowerMessage.contains("option") || responseBody.contains("option");
         
-        org.junit.jupiter.api.Assertions.assertTrue(
+        assertTrue(
             mentionsQuestion || mentionsOptions,
             String.format("Error should mention validation failures. Response: %s", response.getBody().asString())
         );
-        
+
         // Verify error response has helpful structure
-        org.junit.jupiter.api.Assertions.assertNotNull(
+        assertNotNull(
             response.jsonPath().get("timestamp"),
             "Error response should include timestamp"
         );

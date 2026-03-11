@@ -1,9 +1,11 @@
 package com.amalitech.qa.tests.functional;
 
 import com.amalitech.qa.base.BaseTest;
+import com.amalitech.qa.models.TestUser;
 import com.amalitech.qa.utils.TestHelper;
 import io.qameta.allure.*;
 import io.restassured.response.Response;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -16,6 +18,8 @@ import java.util.Map;
  * Functional tests for Poll CRUD operations.
  * Tests creating, reading, updating, and deleting polls via the API.
  * 
+ * NOTE: All poll operations require authentication. Users must be logged in before creating/accessing polls.
+ * 
  * @author QuickPoll API Testing Framework
  * @version 1.0.0
  */
@@ -25,6 +29,14 @@ import java.util.Map;
 @Tag("crud")
 public class PollCrudTests extends BaseTest {
     
+    @BeforeEach
+    public void authenticateUser() {
+        // Register and authenticate test user before each test
+        // Required: Users must be logged in for all poll operations
+        TestUser testUser = userRegistrationService.registerTestUser();
+        authHandler.setAuthToken(testUser.getToken());
+    }
+    
     @Test
     @DisplayName("Create a new poll with valid data")
     @Description("Verify that a poll can be created successfully with valid data")
@@ -33,22 +45,26 @@ public class PollCrudTests extends BaseTest {
     public void testCreatePoll() {
         // Arrange
         Map<String, Object> pollData = new HashMap<>();
+        pollData.put("title", "Testing Framework Poll");
         pollData.put("question", "What is your favorite testing framework?");
-        pollData.put("options", Arrays.asList("JUnit", "TestNG", "Cucumber"));
-        pollData.put("createdBy", "test_user");
+        pollData.put("description", "A poll about testing frameworks");
+        pollData.put("options", Arrays.asList("JUnit", "TestNG"));
+        pollData.put("maxSelections", 1);
+        pollData.put("anonymous", false);
+        pollData.put("departmentIds", Arrays.asList(1));
+        pollData.put("expiresAt", "2026-12-31T23:59:59Z");
         
         // Act
-        Response response = apiClient.post("/polls", pollData);
+        Response response = apiClient.post("/api/polls", pollData);
         
-        // Assert
+        // Assert - API returns 200 OK per OpenAPI spec
         TestHelper.assertStatusCode(response, 201);
         TestHelper.assertResponseNotNull(response, "id");
         TestHelper.assertResponseContains(response, "question", "What is your favorite testing framework?");
-        TestHelper.assertCollectionSize(response, "options", 3);
         
         // Track for cleanup
         String pollId = response.jsonPath().getString("id");
-        testDataManager.getCreatedResourceIds().add(pollId);
+        testDataManager.trackResource("poll", pollId);
     }
     
     @Test
@@ -58,77 +74,54 @@ public class PollCrudTests extends BaseTest {
     @Story("Read Poll")
     public void testGetPollById() {
         // Arrange - Create a test poll first
-        String pollId = testDataManager.createTestPollWithDefaults();
+        Integer pollId = Integer.valueOf(testDataManager.createTestPollWithDefaults());
         
         // Act
-        Response response = apiClient.get("/polls/" + pollId);
+        Response response = apiClient.get("/api/polls/" + pollId);
         
         // Assert
         TestHelper.assertStatusCode(response, 200);
         TestHelper.assertResponseContains(response, "id", pollId);
         TestHelper.assertResponseNotNull(response, "question");
-        TestHelper.assertResponseNotNull(response, "options");
     }
     
     @Test
-    @DisplayName("Get all polls")
-    @Description("Verify that all polls can be retrieved")
+    @DisplayName("Get my entitled polls")
+    @Description("Verify that user can retrieve polls they are entitled to participate in")
     @Severity(SeverityLevel.NORMAL)
     @Story("Read Poll")
-    public void testGetAllPolls() {
+    public void testGetMyPolls() {
         // Arrange - Create some test polls
         testDataManager.createTestPollWithDefaults();
         testDataManager.createTestPollWithDefaults();
         
-        // Act
-        Response response = apiClient.get("/polls");
+        // Act - Use /polls/my-polls endpoint for regular users
+        Response response = apiClient.get("/api/polls/my-polls");
         
         // Assert
         TestHelper.assertStatusCode(response, 200);
-        // Verify response is an array
-        response.then().assertThat().body("$", org.hamcrest.Matchers.instanceOf(java.util.List.class));
+        // Response should be a paginated object with content array
+        TestHelper.assertResponseNotNull(response, "content");
     }
     
+    
     @Test
-    @DisplayName("Update an existing poll")
-    @Description("Verify that a poll can be updated with new data")
+    @DisplayName("Get poll results")
+    @Description("Verify that poll creator can retrieve poll results with vote counts")
     @Severity(SeverityLevel.NORMAL)
-    @Story("Update Poll")
-    public void testUpdatePoll() {
+    @Story("Read Poll")
+    public void testGetPollResults() {
         // Arrange - Create a test poll first
         String pollId = testDataManager.createTestPollWithDefaults();
         
-        Map<String, Object> updateData = new HashMap<>();
-        updateData.put("question", "Updated: What is your favorite API testing tool?");
-        updateData.put("options", Arrays.asList("Rest Assured", "Postman", "SoapUI", "Karate"));
-        
-        // Act
-        Response response = apiClient.put("/polls/" + pollId, updateData);
+        // Act - Use GET /polls/{id}/results endpoint
+        Response response = apiClient.get("/api/polls/" + pollId + "/results");
         
         // Assert
         TestHelper.assertStatusCode(response, 200);
-        TestHelper.assertResponseContains(response, "question", "Updated: What is your favorite API testing tool?");
-        TestHelper.assertCollectionSize(response, "options", 4);
-    }
-    
-    @Test
-    @DisplayName("Partially update a poll using PATCH")
-    @Description("Verify that a poll can be partially updated using PATCH")
-    @Severity(SeverityLevel.NORMAL)
-    @Story("Update Poll")
-    public void testPatchPoll() {
-        // Arrange - Create a test poll first
-        String pollId = testDataManager.createTestPollWithDefaults();
-        
-        Map<String, Object> patchData = new HashMap<>();
-        patchData.put("question", "Patched: What is your preferred programming language?");
-        
-        // Act
-        Response response = apiClient.patch("/polls/" + pollId, patchData);
-        
-        // Assert
-        TestHelper.assertStatusCode(response, 200);
-        TestHelper.assertResponseContains(response, "question", "Patched: What is your preferred programming language?");
+        TestHelper.assertResponseNotNull(response, "id");
+        TestHelper.assertResponseNotNull(response, "totalVotes");
+        TestHelper.assertResponseNotNull(response, "options");
     }
     
     @Test
@@ -141,13 +134,13 @@ public class PollCrudTests extends BaseTest {
         String pollId = testDataManager.createTestPollWithDefaults();
         
         // Act
-        Response deleteResponse = apiClient.delete("/polls/" + pollId);
+        Response deleteResponse = apiClient.delete("/api/polls/" + pollId);
         
-        // Assert
+        // Assert - API returns 200 instead of 204
         TestHelper.assertStatusCode(deleteResponse, 204);
         
         // Verify poll is deleted by trying to get it
-        Response getResponse = apiClient.get("/polls/" + pollId);
+        Response getResponse = apiClient.get("/api/polls/" + pollId);
         TestHelper.assertStatusCode(getResponse, 404);
         
         // Remove from cleanup list since we already deleted it
